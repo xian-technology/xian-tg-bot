@@ -10,9 +10,10 @@ from pathlib import Path
 from loguru import logger
 from functools import wraps
 from loguru._logger import Logger
-from typing import Tuple, Dict, Callable
+from xian_tools.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
+from typing import Tuple, Dict, Callable, Any
 from telegram.ext import CallbackContext, BaseHandler, Job
 from datetime import datetime, timedelta
 from config import ConfigManager
@@ -46,6 +47,12 @@ class TGBFPlugin:
     async def __aenter__(self):
         """ Executes init() method. Make sure to return 'self' if you override it """
         await self.init()
+
+        # Create global db table for wallets
+        if not await self.table_exists_global("wallets"):
+            sql = await self.get_resource_global("create_wallets.sql")
+            await self.exec_sql_global(sql)
+
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -278,7 +285,7 @@ class TGBFPlugin:
             db_name = c.FILE_DAT
 
         db_path = Path.cwd() / c.DIR_DAT / db_name
-        return self._exec_on_db(db_path, sql, *args)
+        return await self._exec_on_db(db_path, sql, *args)
 
     async def exec_sql(self, sql, *args, plugin="", db_name=""):
         """ Execute raw SQL statement on database for given
@@ -314,7 +321,7 @@ class TGBFPlugin:
 
         return await self._exec_on_db(db_path, sql, *args)
 
-    async def _exec_on_db(self, db_path, sql, *args):
+    async def _exec_on_db(self, db_path, sql, *args) -> Dict[str, Any]:
         """ Open database connection and execute SQL statement """
 
         res = {"data": None, "success": None}
@@ -434,7 +441,7 @@ class TGBFPlugin:
         """ Check if message was sent in a private chat or not """
         return message.chat.type == Chat.PRIVATE
 
-    def remove_msg_after(self, *messages: Message, after_secs):
+    async def remove_msg_after(self, *messages: Message, after_secs):
         """ Remove a Telegram message after a given time """
 
         async def remove_msg_job(context: CallbackContext):
@@ -628,3 +635,29 @@ class TGBFPlugin:
             await update.message.reply_text(msg, disable_web_page_preview=True)
 
         return _whitelist
+
+    async def get_wallet(self, user_id, db_name="global.db") -> Wallet:
+        """ Return address and privkey for given user_id.
+        If no wallet exists then it will be created. """
+
+        # Check if user already has a wallet
+        sql = await self.get_resource_global("select_wallet.sql")
+        res = await self.exec_sql_global(sql, user_id, db_name=db_name)
+
+        # User already has a wallet
+        if res["data"]:
+            return Wallet(res["data"][0][2])
+
+        # Create new wallet
+        wallet = Wallet()
+
+        # Save wallet to database
+        await self.exec_sql_global(
+            await self.get_resource_global("insert_wallet.sql"),
+            user_id,
+            wallet.public_key,
+            wallet.private_key,
+            db_name=db_name)
+
+        self.log.info(f'Address {wallet.public_key} created for {user_id}')
+        return wallet
