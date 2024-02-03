@@ -16,6 +16,8 @@ class Active(TGBFPlugin):
 
     async def init_callback(self, update: Update, context: CallbackContext):
         try:
+            if update.edited_message:
+                return
             if update.message.chat.type == Chat.PRIVATE:
                 return
 
