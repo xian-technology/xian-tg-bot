@@ -9,13 +9,14 @@ import utils as utl
 from pathlib import Path
 from loguru import logger
 from functools import wraps
-from loguru._logger import Logger
+from xian_tools.xian import Xian
 from xian_tools.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
 from typing import Tuple, Dict, Callable, Any
 from telegram.ext import CallbackContext, BaseHandler, Job
 from datetime import datetime, timedelta
+from loguru._logger import Logger
 from config import ConfigManager
 from main import TelegramBot
 
@@ -175,7 +176,7 @@ class TGBFPlugin:
         The placeholders need to be wrapped in double curly brackets
         """
 
-        usage = await self.get_resource(f"{self.name}.txt")
+        usage = await self.get_resource(f"{self.name}.html")
 
         if usage:
             usage = usage.replace("{{handle}}", self.handle)
@@ -661,3 +662,7 @@ class TGBFPlugin:
 
         self.log.info(f'Address {wallet.public_key} created for {user_id}')
         return wallet
+
+    async def get_xian(self, wallet: Wallet):
+        node_url = self.cfg_global.get('xian_node')
+        return Xian(node_url, wallet)
