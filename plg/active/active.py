@@ -10,13 +10,7 @@ class Active(TGBFPlugin):
             sql = await self.get_resource('create_active.sql')
             await self.exec_sql(sql)
 
-        await self.add_handler(
-            MessageHandler(
-                filters.ALL,
-                self.init_callback,
-                block=False
-            )
-        )
+        await self.add_handler(MessageHandler(filters.ALL, self.init_callback, block=False))
 
         self.run_repeating(self.cleaner_callback, 86_400)
 
