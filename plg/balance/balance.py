@@ -1,9 +1,8 @@
-import utils as utl
 import constants as con
 
 from plugin import TGBFPlugin
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
+from telegram import Update
+from telegram.ext import CallbackContext, CommandHandler
 
 
 class Balance(TGBFPlugin):
