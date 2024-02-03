@@ -14,10 +14,12 @@ loguru = "^0.7.2"
 psutil = "^5.9.8"
 fastapi = "^0.109.0"
 uvicorn = "^0.27.0.post1"
-xian-tools = "^0.7.0"
+xian-tools = "^0.9.0"
 segno = "^1.6.0"
 qrcode-artistic = "^3.0.2"
 plotly = "^5.18.0"
+pytrends = "^4.9.2"
+kaleido = "0.2.1"
 
 
 [build-system]
