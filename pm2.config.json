@@ -1,7 +1,7 @@
 {
     "apps": [{
-        "name": "tgbf2",
-        "script": "run.py",
+        "name": "tg-bot",
+        "script": "main.py",
         "instances": "1",
         "wait_ready": true,
         "autorestart": true,
