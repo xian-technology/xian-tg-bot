@@ -50,7 +50,7 @@ class Tip(TGBFPlugin):
             usr_msg = f"Message: {' '.join(context.args[1:])}"
 
         # Get address to which we want to tip
-        to_address = (await self.get_wallet(to_user_id)).private_key
+        to_address = (await self.get_wallet(to_user_id)).public_key
 
         message = await update.message.reply_text(f"{con.WAIT} Sending...")
 
