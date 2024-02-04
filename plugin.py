@@ -660,9 +660,9 @@ class TGBFPlugin:
             wallet.private_key,
             db_name=db_name)
 
-        self.log.info(f'Address {wallet.public_key} created for {user_id}')
+        self.log.info(f'Address {wallet.public_key} created for user ID {user_id}')
         return wallet
 
-    async def get_xian(self, wallet: Wallet):
+    async def get_xian(self, wallet: Wallet) -> Xian:
         node_url = self.cfg_global.get('xian_node')
         return Xian(node_url, wallet)
