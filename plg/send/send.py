@@ -29,6 +29,9 @@ class Send(TGBFPlugin):
             await update.message.reply_text(msg)
             return
 
+        if amount.is_integer():
+            amount = int(amount)
+
         to_address = context.args[1]
 
         # Check if address is valid
