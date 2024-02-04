@@ -16,6 +16,10 @@ class Logfile(TGBFPlugin):
     @TGBFPlugin.private
     @TGBFPlugin.send_typing
     async def init_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         log_file = max(con.DIR_LOG.glob('*.log'), key=lambda item: item.stat().st_ctime)
 
         if Path.is_file(Path(log_file)):

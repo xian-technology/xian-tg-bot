@@ -11,6 +11,10 @@ class Help(TGBFPlugin):
 
     @TGBFPlugin.send_typing
     async def init_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         categories = OrderedDict()
 
         for p in self.plugins.values():

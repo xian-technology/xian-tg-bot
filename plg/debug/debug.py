@@ -17,6 +17,10 @@ class Debug(TGBFPlugin):
     @TGBFPlugin.owner
     @TGBFPlugin.send_typing
     async def init_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         try:
             await update.message.delete()
 

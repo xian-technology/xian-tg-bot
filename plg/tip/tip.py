@@ -15,6 +15,10 @@ class Tip(TGBFPlugin):
     @TGBFPlugin.public
     @TGBFPlugin.send_typing
     async def tip_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         if len(context.args) < 1:
             await update.message.reply_text(await self.get_info())
             return

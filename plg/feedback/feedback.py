@@ -17,6 +17,10 @@ class Feedback(TGBFPlugin):
     @TGBFPlugin.private
     @TGBFPlugin.send_typing
     async def init_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         if not context.args:
             await update.message.reply_text(await self.get_info())
             return

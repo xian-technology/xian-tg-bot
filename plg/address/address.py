@@ -18,6 +18,10 @@ class Address(TGBFPlugin):
 
     @TGBFPlugin.send_typing
     async def address_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         context.user_data.clear()
 
         wallet = await self.get_wallet(update.effective_user.id)

@@ -12,6 +12,10 @@ class Balance(TGBFPlugin):
 
     @TGBFPlugin.send_typing
     async def balance_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         wallet = await self.get_wallet(update.effective_user.id)
         xian = await self.get_xian(wallet)
 

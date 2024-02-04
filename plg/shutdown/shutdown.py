@@ -16,6 +16,10 @@ class Shutdown(TGBFPlugin):
     @TGBFPlugin.private
     @TGBFPlugin.send_typing
     async def init_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         msg = f"{con.BYE} Shutting down..."
         await update.message.reply_text(msg)
         self.log.info(msg)

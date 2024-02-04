@@ -13,6 +13,10 @@ class Admin(TGBFPlugin):
     @TGBFPlugin.owner
     @TGBFPlugin.send_typing
     async def init_callback(self, update: Update, context: CallbackContext):
+        # Don't deal with edited messages
+        if not update.message:
+            return
+
         if len(context.args) < 2:
             await update.message.reply_text(await self.get_info())
             return
