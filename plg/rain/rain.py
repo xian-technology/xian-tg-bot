@@ -35,6 +35,9 @@ class Rain(TGBFPlugin):
         try:
             # Check if amount is valid
             amount_total = float(amount_total)
+
+            if amount_total < 0:
+                raise ValueError('Amount can not be negative')
         except:
             msg = f"{con.ERROR} Amount not valid"
             await update.message.reply_text(msg)
