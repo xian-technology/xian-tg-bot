@@ -71,7 +71,6 @@ class Rain(TGBFPlugin):
         else:
             msg = f"{con.ERROR} Unsupported time unit detected!"
             await update.message.reply_text(msg)
-            await self.notify(msg)
             return
 
         chat_id = update.effective_chat.id
@@ -82,8 +81,9 @@ class Rain(TGBFPlugin):
 
         if not rain["success"] or not rain["data"]:
             msg = f"{con.ERROR} Could not determine last active users"
-            await update.message.reply_text(msg)
+            self.log.error(msg)
             await self.notify(msg)
+            await update.message.reply_text(msg)
             return
 
         # Exclude own user from users to airdrop on
@@ -158,51 +158,62 @@ class Rain(TGBFPlugin):
         }
 
         try:
-            # Execute contract to send tokens
-            rain = xian.send_tx(contract, function, kwargs, stamps_to_use)
+            balance = xian.get_balance()
         except Exception as e:
+            msg = f"GET_BALANCE Error: {e}"
+            self.log.error(msg)
+            await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
+            return
+
+        # Check if user has enough balance
+        if balance < amount_total + 5:
+            msg = f"{con.ERROR} Not enough XIAN to rain"
+            await message.edit_text(msg)
+            return
+
+        try:
+            # Approve sending tokens to contract
+            xian.approve(contract)
+        except Exception as e:
+            msg = f"APPROVE Error: {e}"
+            self.log.error(msg)
+            await self.notify(msg)
+            await message.edit_text(f"{con.ERROR} {e}")
+            return
+
+        try:
+            # Execute contract to send tokens
+            success, tx_hash = xian.send_tx(contract, function, kwargs, stamps_to_use)
+        except Exception as e:
             msg = f"SEND_TX Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            return
-
-        # Get transaction hash
-        tx_hash = rain["result"]["hash"]
-
-        try:
-            # Get transaction details
-            tx = xian.get_tx(tx_hash)
-        except Exception as e:
-            msg = f"GET_TX Error: {e}"
             await message.edit_text(f"{con.ERROR} {e}")
-            self.log.error(msg)
-            await self.notify(msg)
-            return
-
-        if 'error' in tx:
-            e = tx['error']
-            msg = f"TX Error: {e}"
-            await message.edit_text(f"{con.ERROR} {e}")
-            self.log.error(msg)
-            await self.notify(msg)
             return
 
         link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
 
-        await message.edit_text(
-            f"{msg}\n\n{link}",
-            disable_web_page_preview=True)
+        if success:
+            await message.edit_text(
+                f"{msg}\n\n{link}",
+                disable_web_page_preview=True
+            )
 
-        for user in user_data:
-            to_user_id = user[0]
+            for user in user_data:
+                to_user_id = user[0]
 
-            try:
-                # Notify user about tip
-                await context.bot.send_message(
-                    to_user_id,
-                    f"You received <code>{amount_single}</code> XIAN from {html.escape(from_username)}\n{link}",
-                    disable_web_page_preview=True)
-                self.log.info(f"User {to_user_id} notified about rain of {amount_single} XIAN")
-            except Exception as e:
-                self.log.info(f"User {to_user_id} could not be notified about rain: {e} - {update}")
+                try:
+                    # Notify user about tip
+                    await context.bot.send_message(
+                        to_user_id,
+                        f"You received <code>{amount_single}</code> XIAN from {html.escape(from_username)}\n{link}",
+                        disable_web_page_preview=True)
+                    self.log.info(f"User {to_user_id} notified about rain of {amount_single} XIAN")
+                except Exception as e:
+                    self.log.info(f"User {to_user_id} could not be notified about rain: {e} - {update}")
+        else:
+            await message.edit_text(
+                f"{con.STOP} Transaction failed\n{link}",
+                disable_web_page_preview=True
+            )

@@ -62,55 +62,57 @@ class Tip(TGBFPlugin):
         message = await update.message.reply_text(f"{con.WAIT} Sending...")
 
         try:
-            # Send token
-            send = xian.send(amount, to_address)
+            balance = xian.get_balance()
         except Exception as e:
+            msg = f"GET_BALANCE Error: {e}"
+            self.log.error(msg)
+            await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
+            return
+
+        # Check if user has enough balance
+        if balance < amount + 1:
+            msg = f"{con.ERROR} Not enough XIAN to tip"
+            await message.edit_text(msg)
+            return
+
+        try:
+            # Send token
+            success, tx_hash = xian.send(amount, to_address)
+        except Exception as e:
             msg = f"SEND Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            return
-
-        # Get transaction hash
-        tx_hash = send["result"]["hash"]
-
-        try:
-            # Get transaction details
-            tx = xian.get_tx(tx_hash)
-        except Exception as e:
-            msg = f"GET_TX Error: {e}"
             await message.edit_text(f"{con.ERROR} {e}")
-            self.log.error(msg)
-            await self.notify(msg)
-            return
-
-        if 'error' in tx:
-            e = tx['error']
-            msg = f"TX Error: {e}"
-            await message.edit_text(f"{con.ERROR} {e}")
-            self.log.error(msg)
-            await self.notify(msg)
             return
 
         link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
 
-        to_user = reply.from_user.first_name
+        if success:
+            to_user = reply.from_user.first_name
 
-        if update.effective_user.username:
-            from_user = f"@{update.effective_user.username}"
+            if update.effective_user.username:
+                from_user = f"@{update.effective_user.username}"
+            else:
+                from_user = update.effective_user.first_name
+
+            await message.edit_text(
+                f"{con.MONEY} {html.escape(to_user)} received <code>{amount}</code> XIAN\n{link}",
+                disable_web_page_preview=True
+            )
+
+            try:
+                # Notify user about tip
+                await context.bot.send_message(
+                    to_user_id,
+                    f"You received <code>{amount}</code> XIAN from {from_user}\n{link}\n\n{usr_msg}",
+                    disable_web_page_preview=True
+                )
+                self.log.info(f"User ID {to_user_id} notified about tip of {amount} XIAN")
+            except Exception as e:
+                self.log.info(f"User ID {to_user_id} could not be notified about tip: {e} - {update}")
         else:
-            from_user = update.effective_user.first_name
-
-        await message.edit_text(
-            f"{con.MONEY} {html.escape(to_user)} received <code>{amount}</code> XIAN\n{link}",
-            disable_web_page_preview=True)
-
-        try:
-            # Notify user about tip
-            await context.bot.send_message(
-                to_user_id,
-                f"You received <code>{amount}</code> XIAN from {from_user}\n{link}\n\n{usr_msg}",
-                disable_web_page_preview=True)
-            self.log.info(f"User ID {to_user_id} notified about tip of {amount} XIAN")
-        except Exception as e:
-            self.log.info(f"User ID {to_user_id} could not be notified about tip: {e} - {update}")
+            await message.edit_text(
+                f"{con.STOP} Transaction failed\n{link}",
+                disable_web_page_preview=True
+            )

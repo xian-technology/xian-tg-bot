@@ -53,39 +53,39 @@ class Send(TGBFPlugin):
         xian = await self.get_xian(from_wallet)
 
         try:
-            # Send token
-            send = xian.send(amount, to_address)
+            balance = xian.get_balance()
         except Exception as e:
+            msg = f"GET_BALANCE Error: {e}"
+            self.log.error(msg)
+            await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
+            return
+
+        # Check if user has enough balance
+        if balance < amount + 1:
+            msg = f"{con.ERROR} Not enough XIAN to send"
+            await message.edit_text(msg)
+            return
+
+        try:
+            # Send token
+            success, tx_hash = xian.send(amount, to_address)
+        except Exception as e:
             msg = f"SEND Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            return
-
-        # Get transaction hash
-        tx_hash = send["result"]["hash"]
-
-        try:
-            # Get transaction details
-            tx = xian.get_tx(tx_hash)
-        except Exception as e:
-            msg = f"GET_TX Error: {e}"
             await message.edit_text(f"{con.ERROR} {e}")
-            self.log.error(msg)
-            await self.notify(msg)
-            return
-
-        if 'error' in tx:
-            e = tx['error']
-            msg = f"TX Error: {e}"
-            await message.edit_text(f"{con.ERROR} {e}")
-            self.log.error(msg)
-            await self.notify(msg)
             return
 
         link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
 
-        await message.edit_text(
-            f"{con.MONEY} Sent <code>{amount}</code> XIAN\n{link}",
-            disable_web_page_preview=True
-        )
+        if success:
+            await message.edit_text(
+                f"{con.MONEY} Sent <code>{amount}</code> XIAN\n{link}",
+                disable_web_page_preview=True
+            )
+        else:
+            await message.edit_text(
+                f"{con.STOP} Transaction failed\n{link}",
+                disable_web_page_preview=True
+            )
