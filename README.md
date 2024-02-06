@@ -1,4 +1,4 @@
-# TGBF2 - Telegram Bot Framework V2
+# Xian Telegram Bot
 
 TGBF2 is a framework to build Telegram bots based on the Python module [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot). That module is already easy to use but once you built more than one bot you will find yourself doing things over and over again and instead of copying things over all the time, it makes more sens to use a framework like this one that can handle certain things for you so that you can focus on implementing the main logic for bot commands.    
 

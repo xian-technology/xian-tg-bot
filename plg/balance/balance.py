@@ -31,4 +31,4 @@ class Balance(TGBFPlugin):
             await self.notify(msg)
             return
 
-        await message.edit_text(f"<code>XIAN: {balance}</code>")
+        await message.edit_text(f"XIAN: <code>{balance}</code>")
