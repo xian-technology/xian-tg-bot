@@ -20,6 +20,7 @@ qrcode-artistic = "^3.0.2"
 plotly = "^5.18.0"
 pytrends = "^4.9.2"
 kaleido = "0.2.1"
+numpy = "^1.26.4"
 
 
 [build-system]
