@@ -29,7 +29,7 @@ class Send(TGBFPlugin):
             # Check if amount is valid
             amount = float(amount)
 
-            if amount < 0:
+            if amount <= 0:
                 raise ValueError('Amount can not be negative')
         except:
             msg = f"{con.ERROR} Amount not valid"
