@@ -173,14 +173,24 @@ class Rain(TGBFPlugin):
             return
 
         try:
-            # Approve sending tokens to contract
-            xian.approve(contract)
+            approved_amount = xian.get_approved_amount(contract)
         except Exception as e:
-            msg = f"APPROVE Error: {e}"
+            msg = f"GET_APPROVED_AMOUNT Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
             return
+
+        if approved_amount < amount_total:
+            try:
+                # Approve sending tokens to contract
+                xian.approve(contract)
+            except Exception as e:
+                msg = f"APPROVE Error: {e}"
+                self.log.error(msg)
+                await self.notify(msg)
+                await message.edit_text(f"{con.ERROR} {e}")
+                return
 
         try:
             # Execute contract to send tokens
