@@ -16,13 +16,15 @@ class Update(TGBFPlugin):
         await self.add_handler(
             MessageHandler(
                 filters.Document.ZIP | filters.Document.FileExtension('py'), 
-                self.init_callback,
+                self.update_callback,
                 block=False
             )
         )
-        
+
+    @TGBFPlugin.owner
+    @TGBFPlugin.private
     @TGBFPlugin.send_typing
-    async def init_callback(self, update: telegram.Update, context: CallbackContext):
+    async def update_callback(self, update: telegram.Update, context: CallbackContext):
         """
         Update a plugin by uploading a file to the bot.
 
@@ -43,10 +45,6 @@ class Update(TGBFPlugin):
         if not isinstance(update, telegram.Update):
             return
         if not update.message:
-            return
-        if update.effective_user.id != int(self.cfg_global.get('admin_tg_id')):
-            return
-        if (await context.bot.get_chat(update.message.chat_id)).type != telegram.Chat.PRIVATE:
             return
 
         name = update.message.document.file_name
