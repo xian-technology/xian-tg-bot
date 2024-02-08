@@ -15,15 +15,15 @@ class Update(TGBFPlugin):
     async def init(self):
         await self.add_handler(
             MessageHandler(
-                filters.Document.ZIP | filters.Document.FileExtension('py'), 
+                filters.Document.ZIP | filters.Document.PY,
                 self.update_callback,
                 block=False
             )
         )
 
-    @TGBFPlugin.owner
-    @TGBFPlugin.private
-    @TGBFPlugin.send_typing
+    @TGBFPlugin.owner(hidden=True)
+    @TGBFPlugin.private(hidden=True)
+    @TGBFPlugin.send_typing()
     async def update_callback(self, update: telegram.Update, context: CallbackContext):
         """
         Update a plugin by uploading a file to the bot.

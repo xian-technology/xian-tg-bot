@@ -12,13 +12,13 @@ class Submit(TGBFPlugin):
     async def init(self):
         await self.add_handler(
             MessageHandler(
-                filters.Document.PY | filters.Document.FileExtension('py'),
+                filters.Document.PY,
                 self.submit_callback,
                 block=False
             )
         )
 
-    @TGBFPlugin.send_typing
+    @TGBFPlugin.send_typing()
     async def submit_callback(self, update: telegram.Update, context: CallbackContext):
         if not isinstance(update, telegram.Update):
             return

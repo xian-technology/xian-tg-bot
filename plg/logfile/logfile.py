@@ -12,9 +12,9 @@ class Logfile(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.init_callback, block=False))
         await self.add_handler(CommandHandler('log', self.init_callback, block=False))
 
-    @TGBFPlugin.owner
-    @TGBFPlugin.private
-    @TGBFPlugin.send_typing
+    @TGBFPlugin.owner(hidden=True)
+    @TGBFPlugin.private(hidden=True)
+    @TGBFPlugin.send_typing()
     async def init_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:

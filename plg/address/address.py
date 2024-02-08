@@ -16,7 +16,7 @@ class Address(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.address_callback, block=False))
         await self.add_handler(CallbackQueryHandler(self.privkey_callback, block=False))
 
-    @TGBFPlugin.send_typing
+    @TGBFPlugin.send_typing()
     async def address_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:

@@ -479,44 +479,48 @@ class TGBFPlugin:
         return True
 
     @classmethod
-    def private(cls, func):
+    def private(cls, hidden: bool = False):
         """ Decorator for methods that need to be run in a private chat with the bot """
 
-        @wraps(func)
-        async def _private(self, update: Update, context: CallbackContext, **kwargs):
-            if (await context.bot.get_chat(update.effective_chat.id)).type == Chat.PRIVATE:
-                if asyncio.iscoroutinefunction(func):
-                    return await func(self, update, context, **kwargs)
-                else:
-                    return func(self, update, context, **kwargs)
+        def decorator(func):
+            @wraps(func)
+            async def _private(self, update: Update, context: CallbackContext, **kwargs):
+                if (await context.bot.get_chat(update.effective_chat.id)).type == Chat.PRIVATE:
+                    if asyncio.iscoroutinefunction(func):
+                        return await func(self, update, context, **kwargs)
+                    else:
+                        return func(self, update, context, **kwargs)
 
-            if update.message:
-                name = context.bot.username if context.bot.username else context.bot.name
-                msg = f"{c.ERROR} Use this command in a chat with the bot @{name}"
-                await update.message.reply_text(msg)
+                if (not hidden) and update.message:
+                    name = context.bot.username if context.bot.username else context.bot.name
+                    msg = f"{c.ERROR} Use this command in a chat with the bot @{name}"
+                    await update.message.reply_text(msg)
 
-        return _private
+            return _private
+        return decorator
 
     @classmethod
-    def public(cls, func):
+    def public(cls, hidden: bool = False):
         """ Decorator for methods that need to be run in a public group """
 
-        @wraps(func)
-        async def _public(self, update: Update, context: CallbackContext, **kwargs):
-            if (await context.bot.get_chat(update.effective_chat.id)).type != Chat.PRIVATE:
-                if asyncio.iscoroutinefunction(func):
-                    return await func(self, update, context, **kwargs)
-                else:
-                    return func(self, update, context, **kwargs)
+        def decorator(func):
+            @wraps(func)
+            async def _public(self, update: Update, context: CallbackContext, **kwargs):
+                if (await context.bot.get_chat(update.effective_chat.id)).type != Chat.PRIVATE:
+                    if asyncio.iscoroutinefunction(func):
+                        return await func(self, update, context, **kwargs)
+                    else:
+                        return func(self, update, context, **kwargs)
 
-            if update.message:
-                msg = f"{c.ERROR} Can only be used in a public chat"
-                await update.message.reply_text(msg)
+                if (not hidden) and update.message:
+                    msg = f"{c.ERROR} Can only be used in a public chat"
+                    await update.message.reply_text(msg)
 
-        return _public
+            return _public
+        return decorator
 
     @classmethod
-    def owner(cls, func):
+    def owner(cls, hidden: bool = False):
         """
         Decorator that executes the method only if the user is a bot admin.
 
@@ -525,117 +529,131 @@ class TGBFPlugin:
         of the currently used plugin config file.
         """
 
-        @wraps(func)
-        async def _owner(self, update: Update, context: CallbackContext, **kwargs):
-            user_id = update.effective_user.id
+        def decorator(func):
+            @wraps(func)
+            async def _owner(self, update: Update, context: CallbackContext, **kwargs):
+                user_id = update.effective_user.id
 
-            plg_admins = self.cfg.get("admins")
-            plg_admins = plg_admins if isinstance(plg_admins, list) else []
+                plg_admins = self.cfg.get("admins")
+                plg_admins = plg_admins if isinstance(plg_admins, list) else []
 
-            global_admin = self.cfg_global.get("admin_tg_id")
+                global_admin = self.cfg_global.get("admin_tg_id")
 
-            if user_id in plg_admins or user_id == global_admin:
+                if user_id in plg_admins or user_id == global_admin:
+                    if asyncio.iscoroutinefunction(func):
+                        return await func(self, update, context, **kwargs)
+                    else:
+                        return func(self, update, context, **kwargs)
+
+                if (not hidden) and update.message:
+                    msg = f"{c.ERROR} Can only be used by the owner"
+                    await update.message.reply_text(msg)
+
+            return _owner
+        return decorator
+
+    @classmethod
+    def dependency(cls):
+        """ Decorator that executes a method only if the mentioned
+        plugins in the config file of the current plugin are enabled """
+
+        def decorator(func):
+            @wraps(func)
+            async def _dependency(self, update: Update, context: CallbackContext, **kwargs):
+                dependencies = self.cfg.get("dependency")
+                dependencies = dependencies if isinstance(dependencies, list) else []
+
+                for dependency in dependencies:
+                    if dependency.lower() not in self.plugins:
+                        msg = f"{c.ERROR} Plugin '{self.name}' is missing dependency '{dependency}'"
+                        await update.message.reply_text(msg)
+                        return
+
                 if asyncio.iscoroutinefunction(func):
                     return await func(self, update, context, **kwargs)
                 else:
                     return func(self, update, context, **kwargs)
 
-        return _owner
+            return _dependency
+        return decorator
 
     @classmethod
-    def dependency(cls, func):
-        """ Decorator that executes a method only if the mentioned
-        plugins in the config file of the current plugin are enabled """
-
-        @wraps(func)
-        async def _dependency(self, update: Update, context: CallbackContext, **kwargs):
-            dependencies = self.cfg.get("dependency")
-            dependencies = dependencies if isinstance(dependencies, list) else []
-
-            for dependency in dependencies:
-                if dependency.lower() not in self.plugins:
-                    msg = f"{c.ERROR} Plugin '{self.name}' is missing dependency '{dependency}'"
-                    await update.message.reply_text(msg)
-                    return
-
-            if asyncio.iscoroutinefunction(func):
-                return await func(self, update, context, **kwargs)
-            else:
-                return func(self, update, context, **kwargs)
-
-        return _dependency
-
-    @classmethod
-    def send_typing(cls, func):
+    def send_typing(cls):
         """ Decorator for sending typing notification in the Telegram chat """
 
-        @wraps(func)
-        async def _send_typing(self, update, context, **kwargs):
-            # Make sure that edited messages will not trigger any functionality
-            if not update.edited_message:
-                try:
-                    await context.bot.send_chat_action(
-                        chat_id=update.effective_chat.id,
-                        action=ChatAction.TYPING)
-                except:
-                    pass
+        def decorator(func):
+            @wraps(func)
+            async def _send_typing(self, update, context, **kwargs):
+                # Make sure that edited messages will not trigger any functionality
+                if not update.edited_message:
+                    try:
+                        await context.bot.send_chat_action(
+                            chat_id=update.effective_chat.id,
+                            action=ChatAction.TYPING)
+                    except:
+                        pass
 
-            if asyncio.iscoroutinefunction(func):
-                return await func(self, update, context, **kwargs)
-            else:
-                return func(self, update, context, **kwargs)
+                if asyncio.iscoroutinefunction(func):
+                    return await func(self, update, context, **kwargs)
+                else:
+                    return func(self, update, context, **kwargs)
 
-        return _send_typing
+            return _send_typing
+        return decorator
 
     @classmethod
-    def blacklist(cls, func):
+    def blacklist(cls, hidden: bool = False):
         """ Decorator to check whether a command can be executed in the given
          chat or not. If the current chat ID is part of the 'blacklist' list
          in the plugins config file then the command will not be executed. """
 
-        @wraps(func)
-        async def _blacklist(self, update: Update, context: CallbackContext, **kwargs):
-            blacklist_chats = self.cfg.get("blacklist")
+        def decorator(func):
+            @wraps(func)
+            async def _blacklist(self, update: Update, context: CallbackContext, **kwargs):
+                blacklist_chats = self.cfg.get("blacklist")
 
-            try:
-                if blacklist_chats and (update.effective_chat.id not in blacklist_chats):
-                    if asyncio.iscoroutinefunction(func):
-                        return await func(self, update, context, **kwargs)
-                    else:
-                        return func(self, update, context, **kwargs)
-            except:
-                pass
+                try:
+                    if blacklist_chats and (update.effective_chat.id not in blacklist_chats):
+                        if asyncio.iscoroutinefunction(func):
+                            return await func(self, update, context, **kwargs)
+                        else:
+                            return func(self, update, context, **kwargs)
+                except:
+                    pass
 
-            name = context.bot.username if context.bot.username else context.bot.name
-            msg = self.cfg.get("blacklist_msg").replace("{{name}}", name)
-            await update.message.reply_text(msg, disable_web_page_preview=True)
+                name = context.bot.username if context.bot.username else context.bot.name
+                msg = self.cfg.get("blacklist_msg").replace("{{name}}", name)
+                await update.message.reply_text(msg, disable_web_page_preview=True)
 
-        return _blacklist
+            return _blacklist
+        return decorator
 
     @classmethod
-    def whitelist(cls, func):
+    def whitelist(cls, hidden: bool = False):
         """ Decorator to check whether a command can be executed in the given
          chat or not. If the current chat ID is part of the 'whitelist' list
          in the plugins config file then the command will be executed. """
 
-        @wraps(func)
-        async def _whitelist(self, update: Update, context: CallbackContext, **kwargs):
-            whitelist_chats = self.cfg.get("whitelist")
+        def decorator(func):
+            @wraps(func)
+            async def _whitelist(self, update: Update, context: CallbackContext, **kwargs):
+                whitelist_chats = self.cfg.get("whitelist")
 
-            try:
-                if whitelist_chats and (update.effective_chat.id in whitelist_chats):
-                    if asyncio.iscoroutinefunction(func):
-                        return await func(self, update, context, **kwargs)
-                    else:
-                        return func(self, update, context, **kwargs)
-            except:
-                pass
+                try:
+                    if whitelist_chats and (update.effective_chat.id in whitelist_chats):
+                        if asyncio.iscoroutinefunction(func):
+                            return await func(self, update, context, **kwargs)
+                        else:
+                            return func(self, update, context, **kwargs)
+                except:
+                    pass
 
-            name = context.bot.username if context.bot.username else context.bot.name
-            msg = self.cfg.get("whitelist_msg").replace("{{name}}", name)
-            await update.message.reply_text(msg, disable_web_page_preview=True)
+                name = context.bot.username if context.bot.username else context.bot.name
+                msg = self.cfg.get("whitelist_msg").replace("{{name}}", name)
+                await update.message.reply_text(msg, disable_web_page_preview=True)
 
-        return _whitelist
+            return _whitelist
+        return decorator
 
     async def get_wallet(self, user_id, db_name="global.db") -> Wallet:
         """ Return address and privkey for given user_id.

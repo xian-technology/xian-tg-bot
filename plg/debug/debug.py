@@ -14,8 +14,8 @@ class Debug(TGBFPlugin):
     async def init(self):
         await self.add_handler(CommandHandler(self.handle, self.init_callback, block=False))
 
-    @TGBFPlugin.owner
-    @TGBFPlugin.send_typing
+    @TGBFPlugin.owner(hidden=True)
+    @TGBFPlugin.send_typing()
     async def init_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
@@ -23,7 +23,10 @@ class Debug(TGBFPlugin):
 
         try:
             await update.message.delete()
+        except:
+            pass
 
+        try:
             vi = sys.version_info
             v = f"{vi.major}.{vi.minor}.{vi.micro}"
 
