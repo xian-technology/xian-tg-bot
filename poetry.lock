@@ -1147,13 +1147,13 @@ dev = ["black (>=19.3b0)", "pytest (>=4.6.2)"]
 
 [[package]]
 name = "xian-tools"
-version = "0.9.4"
+version = "0.9.8"
 description = "Core utils to interact with Xian network"
 optional = false
 python-versions = ">=3.9,<4.0"
 files = [
-    {file = "xian_tools-0.9.4-py3-none-any.whl", hash = "sha256:658e980055b79ae5ed6a10c9928fbcdec08479161228e0d28a53b340a124b27a"},
-    {file = "xian_tools-0.9.4.tar.gz", hash = "sha256:8ecb76595e5c1c6ba23740f266aa0824b22d8fcc7ef424f156a26a2f3728fe35"},
+    {file = "xian_tools-0.9.8-py3-none-any.whl", hash = "sha256:274301f2b949a2f5cf1e86cc39bbb17e1cfcbd87adea38e8516d636283c87b30"},
+    {file = "xian_tools-0.9.8.tar.gz", hash = "sha256:5ebc62830c778485a16f8950ad96d603a11903abed3d2bba46a7485e52145afd"},
 ]
 
 [package.dependencies]
