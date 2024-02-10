@@ -12,6 +12,7 @@ class Active(TGBFPlugin):
 
         await self.add_handler(MessageHandler(filters.ALL, self.active_callback, block=False))
 
+        # Job to clean entries about active users runs daily
         self.run_repeating(self.cleaner_callback, 86_400)
 
     async def active_callback(self, update: Update, context: CallbackContext):
@@ -48,5 +49,5 @@ class Active(TGBFPlugin):
 
     async def cleaner_callback(self, context: CallbackContext):
         sql = await self.get_resource('delete_active.sql')
-        sql = sql.replace('?', self.cfg.get('remove_after_days'))
+        sql = sql.replace('?', str(self.cfg.get('remove_after_days')))
         await self.exec_sql(sql)
