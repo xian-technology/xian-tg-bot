@@ -63,13 +63,13 @@ class Address(TGBFPlugin):
                 caption=f"<code>{wallet.public_key}</code>"
             )
 
-    @TGBFPlugin.send_typing
+    @TGBFPlugin.send_typing()
     async def privkey_callback(self, update: Update, context: CallbackContext):
         if update.callback_query.data != self.name:
             return
 
         if "privkey" not in context.user_data:
-            msg = f"Old message. Please execute command again"
+            msg = f"Old message. Execute command again"
             await context.bot.answer_callback_query(update.callback_query.id, msg)
             return
 
