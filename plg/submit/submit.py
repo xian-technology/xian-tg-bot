@@ -53,7 +53,7 @@ class Submit(TGBFPlugin):
             return
 
         tx_hash = deploy['tx_hash']
-        explorer_url = self.cfg_global.get('xian_explorer')
+        explorer_url = self.cfg_global.get('xian', 'explorer')
         link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
         if deploy['success']:
