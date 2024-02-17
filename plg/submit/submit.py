@@ -44,7 +44,7 @@ class Submit(TGBFPlugin):
         xian = await self.get_xian(from_wallet)
 
         try:
-            success, tx_hash = xian.deploy_contract(contract_name, code)
+            deploy = xian.deploy_contract(contract_name, code)
         except Exception as e:
             msg = f"DEPLOY_CONTRACT Error: {e}"
             self.log.error(msg)
@@ -52,15 +52,17 @@ class Submit(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
+        tx_hash = deploy['tx_hash']
+        explorer_url = self.cfg_global.get('xian_explorer')
+        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-        if success:
+        if deploy['success']:
             await message.edit_text(
                 f"{con.DONE} Contract <code>{contract_name}</code> deployed\n{link}",
                 disable_web_page_preview=True
             )
         else:
             await message.edit_text(
-                f"{con.STOP} Transaction failed\n{link}",
+                f"{con.STOP} {deploy['result']}\n{link}",
                 disable_web_page_preview=True
             )

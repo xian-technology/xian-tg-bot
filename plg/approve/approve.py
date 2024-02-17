@@ -41,7 +41,7 @@ class Approve(TGBFPlugin):
 
         try:
             # Approve contract
-            success, tx_hash = xian.approve(contract, token=token, amount=amount)
+            approve = xian.approve(contract, token=token, amount=amount)
         except Exception as e:
             msg = f"APPROVE Error: {e}"
             self.log.error(msg)
@@ -49,15 +49,17 @@ class Approve(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
+        tx_hash = approve['tx_hash']
+        explorer_url = self.cfg_global.get('xian', 'explorer')
+        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-        if success:
+        if approve['success']:
             await message.edit_text(
                 f"{con.DONE} Contract approved\n{link}",
                 disable_web_page_preview=True
             )
         else:
             await message.edit_text(
-                f"{con.STOP} Transaction failed\n{link}",
+                f"{con.STOP} {approve['result']}\n{link}",
                 disable_web_page_preview=True
             )

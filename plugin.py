@@ -682,5 +682,6 @@ class TGBFPlugin:
         return wallet
 
     async def get_xian(self, wallet: Wallet) -> Xian:
-        node_url = self.cfg_global.get('xian_node')
-        return Xian(node_url, wallet)
+        node_url = self.cfg_global.get('xian', 'node')
+        chain_id = self.cfg_global.get('xian', 'chain_id')
+        return Xian(node_url, chain_id, wallet)

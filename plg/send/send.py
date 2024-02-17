@@ -69,7 +69,7 @@ class Send(TGBFPlugin):
 
         try:
             # Send token
-            success, tx_hash = xian.send(amount, to_address)
+            send = xian.send(amount, to_address)
         except Exception as e:
             msg = f"SEND Error: {e}"
             self.log.error(msg)
@@ -77,15 +77,17 @@ class Send(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
+        tx_hash = send['tx_hash']
+        explorer_url = self.cfg_global.get('xian', 'explorer')
+        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-        if success:
+        if send['success']:
             await message.edit_text(
                 f"{con.MONEY} Sent <code>{amount}</code> XIAN\n{link}",
                 disable_web_page_preview=True
             )
         else:
             await message.edit_text(
-                f"{con.STOP} Transaction failed\n{link}",
+                f"{con.STOP} {send['result']}\n{link}",
                 disable_web_page_preview=True
             )

@@ -18,6 +18,8 @@ class Rain(TGBFPlugin):
     @TGBFPlugin.public()
     @TGBFPlugin.send_typing()
     async def rain_callback(self, update: Update, context: CallbackContext):
+        self.log.debug(f'update: {update}')
+
         # Don't deal with edited messages
         if not update.message:
             return
@@ -159,6 +161,7 @@ class Rain(TGBFPlugin):
 
         try:
             balance = xian.get_balance()
+            self.log.debug(f'balance: {balance}')
         except Exception as e:
             msg = f"GET_BALANCE Error: {e}"
             self.log.error(msg)
@@ -170,10 +173,12 @@ class Rain(TGBFPlugin):
         if balance < amount_total + 5:
             msg = f"{con.ERROR} Not enough XIAN to rain"
             await message.edit_text(msg)
+            self.log.debug(msg)
             return
 
         try:
             approved_amount = xian.get_approved_amount(contract)
+            self.log.debug(f'approved amount: {approved_amount}')
         except Exception as e:
             msg = f"GET_APPROVED_AMOUNT Error: {e}"
             self.log.error(msg)
@@ -184,7 +189,12 @@ class Rain(TGBFPlugin):
         if approved_amount < amount_total:
             try:
                 # Approve sending tokens to contract
-                xian.approve(contract)
+                approve = xian.approve(contract)
+                self.log.debug(f'approve: {approve}')
+
+                if not approve['success']:
+                    await message.edit_text(f"{con.STOP} Can not approve contract")
+                    return
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
                 self.log.error(msg)
@@ -194,7 +204,8 @@ class Rain(TGBFPlugin):
 
         try:
             # Execute contract to send tokens
-            success, tx_hash = xian.send_tx(contract, function, kwargs, stamps_to_use)
+            send = xian.send_tx(contract, function, kwargs, stamps_to_use)
+            self.log.debug(f'send_tx: {send}')
         except Exception as e:
             msg = f"SEND_TX Error: {e}"
             self.log.error(msg)
@@ -202,9 +213,11 @@ class Rain(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        link = f'<a href="{xian.node_url}/tx?hash=0x{tx_hash}">View Transaction</a>'
+        tx_hash = send['tx_hash']
+        explorer_url = self.cfg_global.get('xian', 'explorer')
+        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-        if success:
+        if send['success']:
             await message.edit_text(
                 f"{msg}\n\n{link}",
                 disable_web_page_preview=True
@@ -217,13 +230,14 @@ class Rain(TGBFPlugin):
                     # Notify user about tip
                     await context.bot.send_message(
                         to_user_id,
-                        f"You received <code>{amount_single}</code> XIAN from {html.escape(from_username)}\n{link}",
+                        f"You received <code>{amount_single}</code> XIAN "
+                        f"from {html.escape(from_username)}\n{link}",
                         disable_web_page_preview=True)
                     self.log.info(f"User {to_user_id} notified about rain of {amount_single} XIAN")
                 except Exception as e:
                     self.log.info(f"User {to_user_id} could not be notified about rain: {e} - {update}")
         else:
             await message.edit_text(
-                f"{con.STOP} Transaction failed\n{link}",
+                f"{con.STOP} {send['result']}\n{link}",
                 disable_web_page_preview=True
             )
