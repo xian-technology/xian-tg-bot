@@ -23,6 +23,7 @@ class Update(TGBFPlugin):
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def update_callback(self, update: telegram.Update, context: CallbackContext):
         """

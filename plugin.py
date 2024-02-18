@@ -22,13 +22,11 @@ from main import TelegramBot
 
 
 class TGBFPlugin:
+    log = logger
 
     def __init__(self, tgb: TelegramBot):
         # Parent that instantiated this plugin
         self._tgb = tgb
-
-        # Set default logger
-        self._log = logger
 
         # Set class name as name of this plugin
         self._name = type(self).__name__.lower()
@@ -72,10 +70,6 @@ class TGBFPlugin:
     @property
     def tgb(self) -> TelegramBot:
         return self._tgb
-
-    @property
-    def log(self) -> Logger:
-        return self._log
 
     @property
     def name(self) -> str:
@@ -477,6 +471,23 @@ class TGBFPlugin:
             return False
 
         return True
+
+    @classmethod
+    def logging(cls):
+        """ Decorator for logging out 'update' object from bot """
+
+        def decorator(func):
+            @wraps(func)
+            async def _logging(self, update: Update, context: CallbackContext, **kwargs):
+                TGBFPlugin.log.debug(f'update: {update}')
+
+                if asyncio.iscoroutinefunction(func):
+                    return await func(self, update, context, **kwargs)
+                else:
+                    return func(self, update, context, **kwargs)
+
+            return _logging
+        return decorator
 
     @classmethod
     def private(cls, hidden: bool = False):

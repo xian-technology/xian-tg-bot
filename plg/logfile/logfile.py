@@ -9,13 +9,14 @@ from telegram.ext import CallbackContext, CommandHandler
 class Logfile(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.init_callback, block=False))
-        await self.add_handler(CommandHandler('log', self.init_callback, block=False))
+        await self.add_handler(CommandHandler(self.handle, self.logfile_callback, block=False))
+        await self.add_handler(CommandHandler('log', self.logfile_callback, block=False))
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
-    async def init_callback(self, update: Update, context: CallbackContext):
+    async def logfile_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
             return

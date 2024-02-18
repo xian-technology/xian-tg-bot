@@ -13,12 +13,13 @@ from telegram.ext import CallbackContext, CommandHandler
 class Backup(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.init_callback, block=False))
+        await self.add_handler(CommandHandler(self.handle, self.backup_callback, block=False))
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
-    async def init_callback(self, update: Update, context: CallbackContext):
+    async def backup_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
             return

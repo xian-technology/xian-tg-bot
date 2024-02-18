@@ -16,6 +16,7 @@ class Address(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.address_callback, block=False))
         await self.add_handler(CallbackQueryHandler(self.privkey_callback, block=False))
 
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def address_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
@@ -63,6 +64,7 @@ class Address(TGBFPlugin):
                 caption=f"<code>{wallet.public_key}</code>"
             )
 
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def privkey_callback(self, update: Update, context: CallbackContext):
         if update.callback_query.data != self.name:

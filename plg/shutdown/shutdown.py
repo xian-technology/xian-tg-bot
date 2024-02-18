@@ -10,12 +10,13 @@ from plugin import TGBFPlugin
 class Shutdown(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.init_callback, block=False))
+        await self.add_handler(CommandHandler(self.handle, self.shutdown_callback, block=False))
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
-    async def init_callback(self, update: Update, context: CallbackContext):
+    async def shutdown_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
             return
@@ -25,7 +26,3 @@ class Shutdown(TGBFPlugin):
         self.log.info(msg)
 
         os.kill(os.getpid(), signal.SIGTERM)
-
-    async def shutdown_callback(self):
-        await self.tgb.bot.updater.stop()
-        self.tgb.bot.updater.is_idle = False

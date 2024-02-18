@@ -13,6 +13,7 @@ class Tip(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.tip_callback, block=False))
 
     @TGBFPlugin.public()
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def tip_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages

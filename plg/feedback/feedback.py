@@ -15,6 +15,7 @@ class Feedback(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.init_callback, block=False))
 
     @TGBFPlugin.private()
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def init_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages

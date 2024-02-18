@@ -18,6 +18,7 @@ class Submit(TGBFPlugin):
             )
         )
 
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def submit_callback(self, update: telegram.Update, context: CallbackContext):
         if not isinstance(update, telegram.Update):

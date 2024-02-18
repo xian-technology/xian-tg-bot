@@ -16,10 +16,9 @@ class Rain(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.rain_callback, block=False))
 
     @TGBFPlugin.public()
+    @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def rain_callback(self, update: Update, context: CallbackContext):
-        self.log.debug(f'update: {update}')
-
         # Don't deal with edited messages
         if not update.message:
             return
