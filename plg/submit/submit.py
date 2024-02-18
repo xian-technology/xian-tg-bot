@@ -25,10 +25,22 @@ class Submit(TGBFPlugin):
         if not update.message:
             return
 
-        contract_name = Path(update.message.document.file_name.lower()).stem
+        params = dict()
+
+        for param in update.message.caption.split(' '):
+            p_lst = param.split('=')
+            params[p_lst[0]] = p_lst[1]
+
+        stamps = 1000
+        if 'stamps' in params:
+            stamps = params['stamps']
+
+        name = Path(update.message.document.file_name.lower()).stem
+        if 'name' in params:
+            name = params['name']
 
         # Validate name
-        if not contract_name.startswith('con_'):
+        if not name.startswith('con_'):
             msg = f"{con.ERROR} Contract name needs to start with 'con_'"
             await update.message.reply_text(msg)
             return
@@ -44,7 +56,7 @@ class Submit(TGBFPlugin):
         xian = await self.get_xian(from_wallet)
 
         try:
-            deploy = xian.deploy_contract(contract_name, code)
+            deploy = xian.deploy_contract(name, code, stamps)
         except Exception as e:
             msg = f"DEPLOY_CONTRACT Error: {e}"
             self.log.error(msg)
@@ -58,7 +70,7 @@ class Submit(TGBFPlugin):
 
         if deploy['success']:
             await message.edit_text(
-                f"{con.DONE} Contract <code>{contract_name}</code> deployed\n{link}",
+                f"{con.DONE} Contract <code>{name}</code> deployed\n{link}",
                 disable_web_page_preview=True
             )
         else:
