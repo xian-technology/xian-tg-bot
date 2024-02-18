@@ -26,19 +26,26 @@ class Submit(TGBFPlugin):
         if not update.message:
             return
 
-        params = dict()
-
-        for param in update.message.caption.split(' '):
-            p_lst = param.split('=')
-            params[p_lst[0]] = p_lst[1]
-
         stamps = 1000
-        if 'stamps' in params:
-            stamps = params['stamps']
-
         name = Path(update.message.document.file_name.lower()).stem
-        if 'name' in params:
-            name = params['name']
+
+        params = dict()
+        caption = update.message.caption
+
+        if caption:
+            caption = caption.replace(',', ' ')
+
+            for param in caption.split(' '):
+                p_lst = param.split('=')
+                key = p_lst[0].strip()
+                value = p_lst[1].strip()
+                params[key] = value
+
+            if 'stamps' in params:
+                stamps = params['stamps']
+
+            if 'name' in params:
+                name = params['name']
 
         # Validate name
         if not name.startswith('con_'):
