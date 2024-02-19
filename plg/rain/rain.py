@@ -59,6 +59,9 @@ class Rain(TGBFPlugin):
         try:
             # Check if timeframe is valid
             t_frame = float(t_frame)
+
+            if t_frame <= 0:
+                raise ValueError('Negative values are not allowed')
         except:
             msg = f"{con.ERROR} Time frame not valid"
             await update.message.reply_text(msg)
@@ -70,7 +73,7 @@ class Rain(TGBFPlugin):
         elif t_unit == "h":
             last_time = datetime.utcnow() - timedelta(hours=t_frame)
         else:
-            msg = f"{con.ERROR} Unsupported time unit detected!"
+            msg = f"{con.ERROR} Unsupported time unit"
             await update.message.reply_text(msg)
             return
 
