@@ -3,7 +3,7 @@ import constants as con
 from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-from xian_tools.wallet import key_is_valid
+from xian_py.wallet import key_is_valid
 
 
 class Send(TGBFPlugin):

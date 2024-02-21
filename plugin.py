@@ -9,8 +9,8 @@ import utils as utl
 from pathlib import Path
 from loguru import logger
 from functools import wraps
-from xian_tools.xian import Xian
-from xian_tools.wallet import Wallet
+from xian_py.xian import Xian
+from xian_py.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
 from typing import Tuple, Dict, Callable, Any

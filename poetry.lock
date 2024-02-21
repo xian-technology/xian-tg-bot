@@ -13,13 +13,13 @@ files = [
 
 [[package]]
 name = "anyio"
-version = "4.2.0"
+version = "4.3.0"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "anyio-4.2.0-py3-none-any.whl", hash = "sha256:745843b39e829e108e518c489b31dc757de7d2131d53fac32bd8df268227bfee"},
-    {file = "anyio-4.2.0.tar.gz", hash = "sha256:e1875bb4b4e2de1669f4bc7869b6d3f54231cdced71605e6e64c9be77e3be50f"},
+    {file = "anyio-4.3.0-py3-none-any.whl", hash = "sha256:048e05d0f6caeed70d731f3db756d35dcc1f35747c8c403364a8332c630441b8"},
+    {file = "anyio-4.3.0.tar.gz", hash = "sha256:f75253795a87df48568485fd18cdd2a3fa5c4f7c5be8e5e36637733fce06fed6"},
 ]
 
 [package.dependencies]
@@ -290,13 +290,13 @@ files = [
 
 [[package]]
 name = "httpcore"
-version = "1.0.3"
+version = "1.0.4"
 description = "A minimal low-level HTTP client."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "httpcore-1.0.3-py3-none-any.whl", hash = "sha256:9a6a501c3099307d9fd76ac244e08503427679b1e81ceb1d922485e2f2462ad2"},
-    {file = "httpcore-1.0.3.tar.gz", hash = "sha256:5c0f9546ad17dac4d0772b0808856eb616eb8b48ce94f49ed819fd6982a8a544"},
+    {file = "httpcore-1.0.4-py3-none-any.whl", hash = "sha256:ac418c1db41bade2ad53ae2f3834a3a0f5ae76b56cf5aa497d2d033384fc7d73"},
+    {file = "httpcore-1.0.4.tar.gz", hash = "sha256:cb2839ccfcba0d2d3c1131d3c3e26dfc327326fbe7a5dc0dbfe9f6c9151bb022"},
 ]
 
 [package.dependencies]
@@ -307,7 +307,7 @@ h11 = ">=0.13,<0.15"
 asyncio = ["anyio (>=4.0,<5.0)"]
 http2 = ["h2 (>=3,<5)"]
 socks = ["socksio (==1.*)"]
-trio = ["trio (>=0.22.0,<0.24.0)"]
+trio = ["trio (>=0.22.0,<0.25.0)"]
 
 [[package]]
 name = "httpx"
@@ -1146,21 +1146,21 @@ files = [
 dev = ["black (>=19.3b0)", "pytest (>=4.6.2)"]
 
 [[package]]
-name = "xian-tools"
-version = "0.9.19"
-description = "Core utils to interact with Xian network"
+name = "xian-py"
+version = "0.1.0"
+description = "Python tools to interact with the Xian blockchain"
 optional = false
-python-versions = ">=3.9,<4.0"
+python-versions = ">=3.11,<4.0"
 files = [
-    {file = "xian_tools-0.9.19-py3-none-any.whl", hash = "sha256:3145a223ccbeba0e5ca7a1cf82c1553e555ce5d13b9de03cb0e27ed878965f02"},
-    {file = "xian_tools-0.9.19.tar.gz", hash = "sha256:ad9951ac6d2ec894c506f9e6b59cb0abaa8a25b2f15c10abc2029b31d45355f9"},
+    {file = "xian_py-0.1.0-py3-none-any.whl", hash = "sha256:2b5c971f181096fa7940974f5baf95a90cd3a1f2c048279691ef34a866d8a0d0"},
+    {file = "xian_py-0.1.0.tar.gz", hash = "sha256:4318531908f93345248e34cea54984d551a4dc12053fe1e4fac79250ae22c0d3"},
 ]
 
 [package.dependencies]
-pynacl = ">=1.5.0,<2.0.0"
+PyNaCl = ">=1.5.0,<2.0.0"
 requests = ">=2.31.0,<3.0.0"
 
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "7365f7e6a74c7f19295691a1af039dbe68ddafb4c58276a3acc99f37099b2ef9"
+content-hash = "bee3f3c647ec2795ad5308f5eae1a1c48baaadb4185264c086c80964ad41b716"

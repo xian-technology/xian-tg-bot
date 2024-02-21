@@ -64,7 +64,7 @@ class Submit(TGBFPlugin):
         xian = await self.get_xian(from_wallet)
 
         try:
-            deploy = xian.deploy_contract(name, code, stamps)
+            deploy = xian.submit_contract(name, code, stamps)
         except Exception as e:
             msg = f"DEPLOY_CONTRACT Error: {e}"
             self.log.error(msg)
