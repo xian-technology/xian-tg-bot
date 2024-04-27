@@ -54,21 +54,6 @@ class Send(TGBFPlugin):
         xian = await self.get_xian(from_wallet)
 
         try:
-            balance = xian.get_balance()
-        except Exception as e:
-            msg = f"GET_BALANCE Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
-            await message.edit_text(f"{con.ERROR} {e}")
-            return
-
-        # Check if user has enough balance
-        if balance < amount + 1:
-            msg = f"{con.ERROR} Not enough XIAN to send"
-            await message.edit_text(msg)
-            return
-
-        try:
             # Send token
             send = xian.send(amount, to_address)
         except Exception as e:
@@ -88,7 +73,4 @@ class Send(TGBFPlugin):
                 disable_web_page_preview=True
             )
         else:
-            await message.edit_text(
-                f"{con.STOP} {send['result']}\n{link}",
-                disable_web_page_preview=True
-            )
+            await message.edit_text(f"{con.STOP} {send['message']}")
