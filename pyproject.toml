@@ -7,13 +7,13 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-python-telegram-bot = {extras = ["job-queue"], version = "^20.7"}
+python-telegram-bot = {extras = ["job-queue"], version = "^21.1"}
 requests = "^2.31.0"
 python-dotenv = "^1.0.1"
 loguru = "^0.7.2"
 psutil = "^5.9.8"
-fastapi = "^0.109.0"
-uvicorn = "^0.27.0.post1"
+fastapi = "^0.110.2"
+uvicorn = "^0.29.0"
 segno = "^1.6.0"
 qrcode-artistic = "^3.0.2"
 plotly = "^5.18.0"
