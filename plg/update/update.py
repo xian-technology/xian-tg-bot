@@ -64,6 +64,9 @@ class Update(TGBFPlugin):
                 self.log.warning(f"{con.ERROR} Wrong file format for update")
                 return
 
+            if plugin_name not in self.plugins.keys():
+                return
+
             file = await update.message.effective_attachment.get_file()
 
             if zipped:

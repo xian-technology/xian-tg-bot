@@ -162,23 +162,6 @@ class Rain(TGBFPlugin):
         }
 
         try:
-            balance = xian.get_balance()
-            self.log.debug(f'balance: {balance}')
-        except Exception as e:
-            msg = f"GET_BALANCE Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
-            await message.edit_text(f"{con.ERROR} {e}")
-            return
-
-        # Check if user has enough balance
-        if balance < amount_total + 5:
-            msg = f"{con.ERROR} Not enough XIAN to rain"
-            await message.edit_text(msg)
-            self.log.debug(msg)
-            return
-
-        try:
             approved_amount = xian.get_approved_amount(contract)
             self.log.debug(f'approved amount: {approved_amount}')
         except Exception as e:
@@ -239,7 +222,4 @@ class Rain(TGBFPlugin):
                 except Exception as e:
                     self.log.info(f"User {to_user_id} could not be notified about rain: {e} - {update}")
         else:
-            await message.edit_text(
-                f"{con.STOP} {send['result']}\n{link}",
-                disable_web_page_preview=True
-            )
+            await message.edit_text(f"{con.STOP} {send['message']}")

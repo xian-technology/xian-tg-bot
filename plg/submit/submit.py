@@ -82,7 +82,4 @@ class Submit(TGBFPlugin):
                 disable_web_page_preview=True
             )
         else:
-            await message.edit_text(
-                f"{con.STOP} {deploy['result']}\n{link}",
-                disable_web_page_preview=True
-            )
+            await message.edit_text(f"{con.STOP} {deploy['message']}")

@@ -60,7 +60,4 @@ class Approve(TGBFPlugin):
                 disable_web_page_preview=True
             )
         else:
-            await message.edit_text(
-                f"{con.STOP} {approve['result']}\n{link}",
-                disable_web_page_preview=True
-            )
+            await message.edit_text(f"{con.STOP} {approve['message']}")

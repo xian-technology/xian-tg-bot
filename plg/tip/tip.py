@@ -63,21 +63,6 @@ class Tip(TGBFPlugin):
         message = await update.message.reply_text(f"{con.WAIT} Sending...")
 
         try:
-            balance = xian.get_balance()
-        except Exception as e:
-            msg = f"GET_BALANCE Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
-            await message.edit_text(f"{con.ERROR} {e}")
-            return
-
-        # Check if user has enough balance
-        if balance < amount + 1:
-            msg = f"{con.ERROR} Not enough XIAN to tip"
-            await message.edit_text(msg)
-            return
-
-        try:
             # Send token
             send = xian.send(amount, to_address)
         except Exception as e:
@@ -115,7 +100,4 @@ class Tip(TGBFPlugin):
             except Exception as e:
                 self.log.info(f"User ID {to_user_id} could not be notified about tip: {e} - {update}")
         else:
-            await message.edit_text(
-                f"{con.STOP} {send['result']}\n{link}",
-                disable_web_page_preview=True
-            )
+            await message.edit_text(f"{con.STOP} {send['message']}")

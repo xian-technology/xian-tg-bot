@@ -95,7 +95,7 @@ class TGBFPlugin:
 
     @property
     def plugins(self) -> Dict:
-        """ Return a list of all active plugins """
+        """ Return a dict with all plugins: key = plugin name, value = plugin """
         return self.tgb.plugins
 
     @property
