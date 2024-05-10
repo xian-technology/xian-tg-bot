@@ -2,6 +2,7 @@ import os
 import sqlite3
 import inspect
 import asyncio
+from io import TextIOWrapper
 
 import constants as c
 import utils as utl
@@ -13,7 +14,7 @@ from xian_py.xian import Xian
 from xian_py.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
-from typing import Tuple, Dict, Callable, Any
+from typing import Tuple, Dict, Callable, Any, BinaryIO
 from telegram.ext import CallbackContext, BaseHandler, Job
 from datetime import datetime, timedelta
 from loguru._logger import Logger
@@ -183,6 +184,22 @@ class TGBFPlugin:
 
         await self.notify(f'No usage info for plugin <b>{self.name}</b>')
         return f'{c.ERROR} Could not retrieve usage info'
+
+    async def get_img(self, filename: str = None) -> BinaryIO | None:
+        """ If 'filename' is supplied then the content of the file from
+        the 'res' directory of the plugin will be returned. If it's
+        empty then content of file <plugin_name>.png will be returned. """
+
+        if not filename:
+            filename = f'{self.name}.png'
+
+        filepath = self.get_res_path() / filename
+
+        if not filepath.is_file():
+            await self.notify(f'File not found: {filepath}')
+            return
+
+        return open(filepath, "rb")
 
     async def get_resource_global(self, filename):
         """ Return the content of the given file
