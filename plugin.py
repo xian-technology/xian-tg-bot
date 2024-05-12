@@ -552,8 +552,8 @@ class TGBFPlugin:
         """
         Decorator that executes the method only if the user is a bot admin.
 
-        The user ID that triggered the command has to be in the ["admin"]["ids"]
-        list of the global config file 'global.cfg' or in the ["admins"] list
+        The user ID that triggered the command has to be in 'admin_tg_id'
+        of the global config file 'global.cfg' or in the ["admins"] list
         of the currently used plugin config file.
         """
 
