@@ -10,8 +10,6 @@ from telegram.ext import CallbackContext, CommandHandler
 
 class Rain(TGBFPlugin):
 
-    STAMPS = [28, 22, 19, 18, 17, 16]
-
     async def init(self):
         await self.add_handler(CommandHandler(self.handle, self.rain_callback, block=False))
 
@@ -147,14 +145,6 @@ class Rain(TGBFPlugin):
         contract = self.cfg.get("contract")
         function = self.cfg.get("function")
 
-        # Calculate stamp costs
-        stamps_to_use = 0
-        for a in range(len(addresses)):
-            try:
-                stamps_to_use += self.STAMPS[a]
-            except IndexError:
-                stamps_to_use += self.STAMPS[-1]
-
         kwargs = {
             "addresses": addresses,
             "amount": amount_single,
@@ -189,7 +179,7 @@ class Rain(TGBFPlugin):
 
         try:
             # Execute contract to send tokens
-            send = xian.send_tx(contract, function, kwargs, stamps_to_use)
+            send = xian.send_tx(contract, function, kwargs)
             self.log.debug(f'send_tx: {send}')
         except Exception as e:
             msg = f"SEND_TX Error: {e}"
