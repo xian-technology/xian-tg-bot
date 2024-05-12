@@ -24,8 +24,8 @@ class Debug(TGBFPlugin):
 
         try:
             await update.message.delete()
-        except:
-            pass
+        except Exception as e:
+            self.log.debug(f'Could not delete message: {e}')
 
         try:
             vi = sys.version_info
