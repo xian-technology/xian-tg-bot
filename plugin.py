@@ -2,7 +2,6 @@ import os
 import sqlite3
 import inspect
 import asyncio
-from io import TextIOWrapper
 
 import constants as c
 import utils as utl
