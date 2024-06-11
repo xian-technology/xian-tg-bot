@@ -1,4 +1,5 @@
 import os
+import signal
 import sys
 import asyncio
 import importlib
@@ -53,23 +54,22 @@ class TelegramBot:
             logger.error('Invalid Telegram bot token')
             return
 
-        async with self.bot:
-            logger.info("Initialize bot...")
-            await self.bot.initialize()
-            logger.info("Starting bot...")
-            await self.bot.start()
-            logger.info("Polling for updates...")
-            await self.bot.updater.start_polling(drop_pending_updates=True)
-            logger.info("Starting webserver...")
-            await self.web.run().serve()
-
-            # Shutdown bot
-            await self.bot.updater.stop()
-            await self.bot.stop()
+        try:
+            async with self.bot:
+                logger.info("Initialize bot...")
+                await self.bot.initialize()
+                logger.info("Starting bot...")
+                await self.bot.start()
+                logger.info("Polling for updates...")
+                await self.bot.updater.start_polling(drop_pending_updates=True)
+                logger.info("Starting webserver...")
+                await self.web.run().serve()
+        except Exception as e:
+            logger.error(e)
+            os.kill(os.getpid(), signal.SIGTERM)
 
     async def load_plugins(self):
         """ Load all plugins from the 'plg' folder """
-
         try:
             for _, folders, _ in os.walk(con.DIR_PLG):
                 for folder in folders:
@@ -83,7 +83,6 @@ class TelegramBot:
 
     async def enable_plugin(self, name):
         """ Load a single plugin """
-
         # If already enabled, disable first
         await self.disable_plugin(name)
 
@@ -107,7 +106,6 @@ class TelegramBot:
     async def disable_plugin(self, name):
         """ Remove a plugin from the plugin list and also
          remove all its handlers and endpoints """
-
         if name in self.plugins:
             plugin = self.plugins[name]
 
@@ -160,6 +158,7 @@ if __name__ == "__main__":
             rotation="5 MB"
         )
 
+    # Run the bot
     asyncio.run(TelegramBot().run(
         ConfigManager(con.DIR_CFG / con.FILE_CFG),
         os.getenv('TG_TOKEN'))
