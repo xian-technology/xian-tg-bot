@@ -1,5 +1,4 @@
 import uvicorn
-
 from pathlib import Path
 from fastapi import FastAPI, APIRouter
 from starlette.responses import FileResponse
@@ -43,3 +42,8 @@ class WebAppWrapper:
                     self.app.routes.remove(route)
                 else:
                     self.router.routes.remove(route)
+
+    async def stop(self):
+        if self.srv and self.srv.started:
+            self.srv.should_exit = True
+            await self.srv.shutdown()
