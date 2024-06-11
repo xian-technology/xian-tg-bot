@@ -21,6 +21,7 @@ pytrends = "^4.9.2"
 kaleido = "0.2.1"
 numpy = "^1.26.4"
 xian-py = "^0.1.0"
+websockets = "^12.0"
 
 
 [build-system]
