@@ -64,8 +64,7 @@ class TelegramBot:
                 await self.bot.updater.start_polling(drop_pending_updates=True)
                 logger.info("Starting webserver...")
                 await self.web.run().serve()
-        except Exception as e:
-            logger.error(e)
+        except:
             os.kill(os.getpid(), signal.SIGTERM)
 
     async def load_plugins(self):
