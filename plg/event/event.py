@@ -4,11 +4,19 @@ import json
 import gc
 
 from plugin import TGBFPlugin
+from functools import partial
+from xian_py.utils import decode_str
+from typing import Callable
 
 
 class Event(TGBFPlugin):
 
+    # Key = Tx hash, Value = Callable - function to call
+    execute = dict()
+    event = str()
+
     async def init(self):
+        self.event = self.cfg.get('event')
         asyncio.create_task(self.websocket_loop())
 
     async def websocket_loop(self):
@@ -19,7 +27,8 @@ class Event(TGBFPlugin):
         while True:
             try:
                 self.log.info(f'Initiating websocket connection...')
-                uri = self.cfg.get('ws_masternode')
+                uri = self.cfg_global.get('xian', 'node')
+                uri = uri.replace('http', 'ws') + '/websocket'
                 async with websockets.connect(uri) as ws:
                     await self.on_open(ws)
                     try:
@@ -44,7 +53,32 @@ class Event(TGBFPlugin):
                 await asyncio.sleep(wait_secs)
 
     async def on_message(self, ws, msg):
-        self.log.info(f'New event --> {msg}')
+        self.log.info(f'Event {self.event}: {msg}')
+
+        msg = json.loads(msg)
+
+        if not msg['result']:
+            return
+
+        tx_hash_from_event = msg['result']['events']['tx.hash']
+
+        try:
+            for tx_hash in list(self.execute.keys()):
+                if tx_hash in tx_hash_from_event:
+                    data = msg['result']['data']['value']['TxResult']['result']['data']
+                    decoded_data = json.loads(decode_str(data))
+                    status = decoded_data['status']
+                    result = decoded_data['result']
+
+                    await partial(
+                        self.execute[tx_hash],
+                        success=True if status == 0 else False,
+                        result='' if result == 'None' else result
+                    )()
+                    del self.execute[tx_hash]
+        except Exception as e:
+            self.log.error(e)
+            await self.notify(e)
 
     async def on_error(self, error):
         self.log.error(f'Websocket error: {error}')
@@ -61,9 +95,12 @@ class Event(TGBFPlugin):
             "method": "subscribe",
             "id": 0,
             "params": {
-                "query": "tm.event='NewBlock'"
+                "query": f"tm.event='{self.event}'"
             }
         }
 
         await ws.send(json.dumps(subscribe_message))
         self.log.info("Sent subscription message")
+
+    async def track_tx(self, tx_hash: str, function_to_call: Callable):
+        self.execute[tx_hash] = function_to_call
