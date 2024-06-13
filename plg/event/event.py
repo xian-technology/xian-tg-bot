@@ -27,8 +27,13 @@ class Event(TGBFPlugin):
         while True:
             try:
                 self.log.info(f'Initiating websocket connection...')
-                uri = self.cfg_global.get('xian', 'node')
-                uri = uri.replace('http', 'ws') + '/websocket'
+
+                if self.cfg.get('ws_masternode'):
+                    uri = self.cfg.get('ws_masternode')
+                else:
+                    uri = self.cfg_global.get('xian', 'node')
+                    uri = uri.replace('http', 'ws') + '/websocket'
+
                 async with websockets.connect(uri) as ws:
                     await self.on_open(ws)
                     try:
