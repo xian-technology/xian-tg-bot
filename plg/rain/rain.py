@@ -189,27 +189,34 @@ class Rain(TGBFPlugin):
             return
 
         tx_hash = send['tx_hash']
-        explorer_url = self.cfg_global.get('xian', 'explorer')
-        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-        if send['success']:
-            await message.edit_text(
-                f"{msg}\n\n{link}",
-                disable_web_page_preview=True
-            )
+        async def tx_result(success: str, result: str):
+            if not success:
+                await message.edit_text(f"{con.STOP} {result}")
+            else:
+                explorer_url = self.cfg_global.get('xian', 'explorer')
+                link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-            for user in user_data:
-                to_user_id = user[0]
+                await message.edit_text(
+                    f"{msg}\n\n{link}",
+                    disable_web_page_preview=True
+                )
 
-                try:
-                    # Notify user about tip
-                    await context.bot.send_message(
-                        to_user_id,
-                        f"You received <code>{amount_single}</code> XIAN "
-                        f"from {html.escape(from_username)}\n{link}",
-                        disable_web_page_preview=True)
-                    self.log.info(f"User {to_user_id} notified about rain of {amount_single} XIAN")
-                except Exception as e:
-                    self.log.info(f"User {to_user_id} could not be notified about rain: {e} - {update}")
-        else:
+                for user in user_data:
+                    to_user_id = user[0]
+
+                    try:
+                        # Notify user about tip
+                        await context.bot.send_message(
+                            to_user_id,
+                            f"You received <code>{amount_single}</code> XIAN "
+                            f"from {html.escape(from_username)}\n{link}",
+                            disable_web_page_preview=True)
+                        self.log.info(f"User {to_user_id} notified about rain of {amount_single} XIAN")
+                    except Exception as ex:
+                        self.log.warning(f"User {to_user_id} could not be notified about rain: {ex} - {update}")
+
+        if not send['success']:
             await message.edit_text(f"{con.STOP} {send['message']}")
+        else:
+            await self.plugins['event'].track_tx(tx_hash, tx_result)

@@ -73,31 +73,38 @@ class Tip(TGBFPlugin):
             return
 
         tx_hash = send['tx_hash']
-        explorer_url = self.cfg_global.get('xian', 'explorer')
-        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-        if send['success']:
-            to_user = reply.from_user.first_name
-
-            if update.effective_user.username:
-                from_user = f"@{update.effective_user.username}"
+        async def tx_result(success: str, result: str):
+            if not success:
+                await message.edit_text(f"{con.STOP} {result}")
             else:
-                from_user = update.effective_user.first_name
+                explorer_url = self.cfg_global.get('xian', 'explorer')
+                link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-            await message.edit_text(
-                f"{con.MONEY} {html.escape(to_user)} received <code>{amount}</code> XIAN\n{link}",
-                disable_web_page_preview=True
-            )
+                to_user = reply.from_user.first_name
 
-            try:
-                # Notify user about tip
-                await context.bot.send_message(
-                    to_user_id,
-                    f"You received <code>{amount}</code> XIAN from {from_user}\n{link}\n\n{usr_msg}",
+                if update.effective_user.username:
+                    from_user = f"@{update.effective_user.username}"
+                else:
+                    from_user = update.effective_user.first_name
+
+                await message.edit_text(
+                    f"{con.MONEY} {html.escape(to_user)} received <code>{amount}</code> XIAN\n{link}",
                     disable_web_page_preview=True
                 )
-                self.log.info(f"User ID {to_user_id} notified about tip of {amount} XIAN")
-            except Exception as e:
-                self.log.info(f"User ID {to_user_id} could not be notified about tip: {e} - {update}")
-        else:
+
+                try:
+                    # Notify user about tip
+                    await context.bot.send_message(
+                        to_user_id,
+                        f"You received <code>{amount}</code> XIAN from {from_user}\n{link}\n\n{usr_msg}",
+                        disable_web_page_preview=True
+                    )
+                    self.log.info(f"User ID {to_user_id} notified about tip of {amount} XIAN")
+                except Exception as ex:
+                    self.log.warning(f"User ID {to_user_id} could not be notified about tip: {ex} - {update}")
+
+        if not send['success']:
             await message.edit_text(f"{con.STOP} {send['message']}")
+        else:
+            await self.plugins['event'].track_tx(tx_hash, tx_result)
