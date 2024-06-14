@@ -93,6 +93,11 @@ class TGBFPlugin:
         return self.cfg.get("description")
 
     @property
+    def aliases(self) -> str:
+        """ Return a list of aliases for this command """
+        return self.cfg.get("aliases")
+
+    @property
     def plugins(self) -> Dict:
         """ Return a dict with all plugins: key = plugin name, value = plugin """
         return self.tgb.plugins
@@ -552,7 +557,7 @@ class TGBFPlugin:
         Decorator that executes the method only if the user is a bot admin.
 
         The user ID that triggered the command has to be in 'admin_tg_id'
-        of the global config file 'global.cfg' or in the ["admins"] list
+        of the global config file 'global.json' or in the ["admins"] list
         of the currently used plugin config file.
         """
 

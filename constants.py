@@ -10,7 +10,7 @@ DIR_TMP = Path('tmp')
 DIR_BCK = Path('bck')
 
 # Extensions
-CFG_EXT = '.cfg'
+CFG_EXT = '.json'
 DAT_EXT = '.db'
 
 # Files

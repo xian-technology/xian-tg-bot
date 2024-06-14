@@ -10,6 +10,7 @@ class Send(TGBFPlugin):
 
     async def init(self):
         await self.add_handler(CommandHandler(self.handle, self.send_callback, block=False))
+        await self.add_handler(CommandHandler('withdraw', self.send_callback, block=False))
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()

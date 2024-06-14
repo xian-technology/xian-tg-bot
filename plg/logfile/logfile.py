@@ -11,6 +11,7 @@ class Logfile(TGBFPlugin):
     async def init(self):
         await self.add_handler(CommandHandler(self.handle, self.logfile_callback, block=False))
         await self.add_handler(CommandHandler('log', self.logfile_callback, block=False))
+        await self.add_handler(CommandHandler('logs', self.logfile_callback, block=False))
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)

@@ -2,8 +2,8 @@
     "admin_tg_id": 134166731,
     "webserver_port": 5000,
     "xian": {
-        "node": "https://testnet.xian.org",
+        "node": "http://127.0.0.1:26657",
         "explorer": "https://explorer.xian.org",
-        "chain_id": "xian-testnet-1"
+        "chain_id": "unique-chain-id-goes-here"
     }
 }
