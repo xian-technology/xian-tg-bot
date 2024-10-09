@@ -16,8 +16,8 @@ class Tokenomics(TGBFPlugin):
             return
 
         msg = await update.message.reply_photo(
-                photo=await self.get_img('tokenomics.jpg'),
-                caption=f"<code>Total supply of XIAN: 111.111.111</code>"
+                photo=await self.get_img('tokenomics.png'),
+                caption=f"<code>Total Supply: 111.111.111 XIAN</code>"
             )
 
         if not self.is_private(update.message):
