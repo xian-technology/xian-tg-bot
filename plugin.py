@@ -337,10 +337,11 @@ class TGBFPlugin:
 
         return await self._exec_on_db(db_path, sql, *args)
 
-    async def _exec_on_db(self, db_path, sql, *args) -> Dict[str, Any]:
+    async def _exec_on_db(self, db_path: Path, sql: str, *args) -> Dict[str, Any]:
         """ Open database connection and execute SQL statement """
 
         res = {"data": None, "success": None}
+        self.log.debug(f"Writing into '{db_path}' with SQL '{sql}' values '{args}'")
 
         try:
             # Create directory if it doesn't exist
