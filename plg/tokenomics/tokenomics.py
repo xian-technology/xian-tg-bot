@@ -19,6 +19,3 @@ class Tokenomics(TGBFPlugin):
                 photo=await self.get_img('tokenomics.png'),
                 caption=f"<code>Total Supply: 111.111.111 XIAN</code>"
             )
-
-        if not self.is_private(update.message):
-            await self.remove_msg_after(update.message, msg, after_secs=20)
