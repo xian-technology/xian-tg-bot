@@ -714,7 +714,7 @@ class TGBFPlugin:
         self.log.info(f'Address {wallet.public_key} created for user ID {user_id}')
         return wallet
 
-    async def get_xian(self, wallet: Wallet) -> Xian:
+    async def get_xian(self, wallet: Wallet = None) -> Xian:
         node_url = self.cfg_global.get('xian', 'node')
         chain_id = self.cfg_global.get('xian', 'chain_id')
         return Xian(node_url, chain_id, wallet)
