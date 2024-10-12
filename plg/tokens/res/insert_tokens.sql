@@ -1,2 +1,2 @@
-INSERT INTO tokens (user_id, contract, decimals)
-VALUES (?, ?, ?)
+INSERT INTO tokens (user_id, contract, ticker, decimals)
+VALUES (?, ?, ?, ?)

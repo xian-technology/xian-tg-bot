@@ -48,7 +48,10 @@ class Tokens(TGBFPlugin):
                 msg = str()
                 for token in tokens['data']:
                     msg += f'<code>{token[1]}</code>\n'
-                await update.message.reply_text(msg)
+                if msg:
+                    await update.message.reply_text(msg)
+                else:
+                    await update.message.reply_text(f'{con.INFO} Your token list is empty')
                 return
             else:
                 await update.message.reply_text(await self.get_info())
@@ -71,12 +74,22 @@ class Tokens(TGBFPlugin):
                     await update.message.reply_text(msg)
                     return
 
-                # TODO: Check if contract exists on chain, if no, show error
+                xian = await self.get_xian()
+                ticker = xian.get_contract_data(
+                    lvl2,
+                    'metadata',
+                    'token_symbol'
+                )
+
+                if not ticker:
+                    msg = f"{con.ERROR} Contract not available!"
+                    await update.message.reply_text(msg)
+                    return
 
                 # Insert token into DB
                 sql = await self.get_resource("insert_tokens.sql")
                 decimals = self.cfg.get('default_decimals')
-                await self.exec_sql(sql, user_id, lvl2, decimals)
+                await self.exec_sql(sql, user_id, lvl2, ticker, decimals)
                 await update.message.reply_text(f"{con.STARS} Token contract added!")
                 return
 
