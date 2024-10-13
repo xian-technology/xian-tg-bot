@@ -341,7 +341,9 @@ class TGBFPlugin:
         """ Open database connection and execute SQL statement """
 
         res = {"data": None, "success": None}
-        self.log.debug(f"Writing into '{db_path}' with SQL '{sql}' values '{args}'")
+
+        sql_str = sql.replace('\n', ' ')
+        self.log.debug(f"Access DB '{db_path}' with SQL '{sql_str}' and values '{args}'")
 
         try:
             # Create directory if it doesn't exist
