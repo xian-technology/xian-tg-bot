@@ -45,13 +45,18 @@ class Tokens(TGBFPlugin):
 
             # List all tokens
             if context.args[0].lower() == 'list':
-                msg = str()
+                msg = 'Contract - Ticker - Decimal places\n'
                 for token in tokens['data']:
-                    msg += f'<code>{token[1]}</code>\n'
-                if msg:
+                    msg += (f'<code>{token[1]}</code> - '
+                            f'<code>{token[2]}</code> - '
+                            f'<code>{token[3]}</code>\n')
+                if msg != 'Contract - Ticker - Decimal places\n':
                     await update.message.reply_text(msg)
                 else:
-                    await update.message.reply_text(f'{con.INFO} Your token list is empty')
+                    await update.message.reply_text(
+                        f'{con.INFO} Your token list is empty. '
+                        f'You can add tokens with <code>/tokens contract_name</code>'
+                    )
                 return
             else:
                 await update.message.reply_text(await self.get_info())
