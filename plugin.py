@@ -342,7 +342,7 @@ class TGBFPlugin:
 
         res = {"data": None, "success": None}
 
-        sql_str = sql.replace('\n', ' ')
+        sql_str = ' '.join(sql.split())
         self.log.debug(f"Access DB '{db_path}' with SQL '{sql_str}' and values '{args}'")
 
         try:
