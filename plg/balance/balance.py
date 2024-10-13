@@ -10,6 +10,7 @@ class Balance(TGBFPlugin):
     async def init(self):
         await self.add_handler(CommandHandler(self.handle, self.balance_callback, block=False))
 
+    @TGBFPlugin.private()
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def balance_callback(self, update: Update, context: CallbackContext):
@@ -17,14 +18,26 @@ class Balance(TGBFPlugin):
         if not update.message:
             return
 
-        wallet = await self.get_wallet(update.effective_user.id)
+        user_id = update.message.from_user.id
+
+        wallet = await self.get_wallet(user_id)
         xian = await self.get_xian(wallet)
 
-        message = await update.message.reply_text(f"{con.WAIT} Retrieving balance ...")
+        message = await update.message.reply_text(f"{con.WAIT} Retrieving balances ...")
 
         try:
             # Get balance
-            balance = xian.get_balance()
+            xian_balance = xian.get_balance()
+            balances = f'<code>XIAN: {xian_balance}</code>\n'
+
+            sql = await self.get_resource('select_tokens.sql', 'tokens')
+            tokens = await self.exec_sql(sql, user_id, plugin='tokens')
+
+            for token in tokens['data']:
+                token_contract = token[1]
+                token_balance = xian.get_balance(token_contract)
+                balances += f'<code>{token[2]}: {token_balance}</code>\n'
+
         except Exception as e:
             await message.edit_text(f"{con.ERROR} {e}")
             msg = f"GET_BALANCE Error: {e}"
@@ -32,4 +45,4 @@ class Balance(TGBFPlugin):
             await self.notify(msg)
             return
 
-        await message.edit_text(f"XIAN: <code>{balance}</code>")
+        await message.edit_text(balances)
