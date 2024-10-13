@@ -8,11 +8,11 @@ from telegram.ext import CallbackContext, CommandHandler
 class Approve(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.appove_callback, block=False))
+        await self.add_handler(CommandHandler(self.handle, self.approve_callback, block=False))
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
-    async def appove_callback(self, update: Update, context: CallbackContext):
+    async def approve_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
             return
