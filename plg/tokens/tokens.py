@@ -87,14 +87,14 @@ class Tokens(TGBFPlugin):
                 )
 
                 if not ticker:
-                    msg = f"{con.ERROR} Contract not available!"
+                    msg = f"{con.ERROR} Unknown contract!"
                     await update.message.reply_text(msg)
                     return
 
                 # Insert token into DB
                 sql = await self.get_resource("insert_tokens.sql")
                 decimals = self.cfg.get('default_decimals')
-                await self.exec_sql(sql, user_id, lvl2, ticker, decimals)
+                await self.exec_sql(sql, user_id, lvl2, ticker.upper(), decimals)
                 await update.message.reply_text(f"{con.STARS} Token contract added!")
                 return
 
