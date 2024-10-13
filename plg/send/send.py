@@ -19,13 +19,60 @@ class Send(TGBFPlugin):
         if not update.message:
             return
 
-        if len(context.args) != 2:
+        if len(context.args) < 2:
             await update.message.reply_text(
                 await self.get_info()
             )
             return
 
-        amount = context.args[0]
+        user_id = update.message.from_user.id
+
+        contract = ''
+        ticker = ''
+        amount = 0
+        to = ''
+
+        # Sending XIAN
+        if len(context.args) == 2:
+            contract = 'currency'
+            ticker = 'XIAN'
+            amount = context.args[0]
+            to = context.args[1]
+
+        # Sending token
+        elif len(context.args) == 3:
+            sql = await self.get_resource('select_tokens.sql', 'tokens')
+            tokens = await self.exec_sql(sql, user_id, plugin='tokens')
+
+            # It is a contract
+            if context.args[0].lower().startswith('con_'):
+                for token in tokens['data']:
+                    if token[1] == context.args[0].lower():
+                        contract = token[1]
+                        ticker = token[2]
+
+            # It is a ticker
+            else:
+                for token in tokens['data']:
+                    if token[2] == context.args[0].upper():
+                        contract = token[1]
+                        ticker = token[2]
+
+            amount = context.args[1]
+            to = context.args[2]
+
+        else:
+            await update.message.reply_text(
+                await self.get_info()
+            )
+            return
+
+        if not contract:
+            await update.message.reply_text(
+                f'{con.ERROR} Unknown contract. Make sure you added this token to '
+                f'your token list first with <code>/token add contract_name</code>'
+            )
+            return
 
         try:
             # Check if amount is valid
@@ -41,22 +88,20 @@ class Send(TGBFPlugin):
         if amount.is_integer():
             amount = int(amount)
 
-        to_address = context.args[1]
-
         # Check if address is valid
-        if not key_is_valid(to_address):
+        if not key_is_valid(to):
             msg = f"{con.ERROR} Not a valid address"
             await update.message.reply_text(msg)
             return
 
-        message = await update.message.reply_text(f"{con.WAIT} Sending ...")
+        message = await update.message.reply_text(f"{con.WAIT} Sending {ticker} ...")
 
         from_wallet = await self.get_wallet(update.effective_user.id)
         xian = await self.get_xian(from_wallet)
 
         try:
             # Send token
-            send = xian.send(amount, to_address)
+            send = xian.send(amount, to, token=contract)
         except Exception as e:
             msg = f"SEND Error: {e}"
             self.log.error(msg)
