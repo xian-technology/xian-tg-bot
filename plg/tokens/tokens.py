@@ -69,8 +69,8 @@ class Tokens(TGBFPlugin):
 
             # Add token
             if lvl1 == 'add':
-                if not lvl2.startswith('con_'):
-                    msg = f"{con.ERROR} Token contract needs to start with <code>con_</code>"
+                if not lvl2.startswith(('con_', 'currency')):
+                    msg = f"{con.ERROR} Not a valid contract name!"
                     await update.message.reply_text(msg)
                     return
 
@@ -80,11 +80,15 @@ class Tokens(TGBFPlugin):
                     return
 
                 xian = await self.get_xian()
-                ticker = xian.get_contract_data(
-                    lvl2,
-                    'metadata',
-                    'token_symbol'
-                )
+
+                if lvl2 == 'currency':
+                    ticker = 'XIAN'
+                else:
+                    ticker = xian.get_contract_data(
+                        lvl2,
+                        'metadata',
+                        'token_symbol'
+                    )
 
                 if not ticker:
                     msg = f"{con.ERROR} Unknown contract!"
@@ -100,8 +104,8 @@ class Tokens(TGBFPlugin):
 
             # Remove token
             if lvl1 == 'remove':
-                if not lvl2.startswith('con_'):
-                    msg = f"{con.ERROR} Contract needs to start with <code>con_</code>"
+                if not lvl2.startswith(('con_', 'currency')):
+                    msg = f"{con.ERROR} Not a valid contract name!"
                     await update.message.reply_text(msg)
                     return
 
@@ -119,7 +123,7 @@ class Tokens(TGBFPlugin):
             # Decimal places
             if lvl1 == 'decimals':
                 if ':' in lvl2:
-                    if not await is_contract_present(lvl2):
+                    if not await is_contract_present(lvl2.split(':')[0]):
                         msg = f"{con.ERROR} Contract is unknown!"
                         await update.message.reply_text(msg)
                         return
