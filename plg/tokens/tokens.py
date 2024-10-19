@@ -28,14 +28,11 @@ class Tokens(TGBFPlugin):
             return
 
         user_id = update.message.from_user.id
-
-        # Get all tokens for current user
-        sql = await self.get_resource("select_tokens.sql")
-        tokens = await self.exec_sql(sql, user_id)
+        tokens = await self.get_tokens(user_id)
 
         # Check if contract name is saved
         async def is_contract_present(name: str):
-            for token in tokens['data']:
+            for token in tokens:
                 if token[1] == name:
                     return True
             return False
@@ -46,7 +43,7 @@ class Tokens(TGBFPlugin):
             # List all tokens
             if context.args[0].lower() == 'list':
                 msg = 'Contract - Ticker - Decimal places\n'
-                for token in tokens['data']:
+                for token in tokens:
                     msg += (f'<code>{token[1]}</code> - '
                             f'<code>{token[2]}</code> - '
                             f'<code>{token[3]}</code>\n')
@@ -96,7 +93,7 @@ class Tokens(TGBFPlugin):
                     return
 
                 # Insert token into DB
-                sql = await self.get_resource("insert_tokens.sql")
+                sql = await self.get_resource("insert_token.sql")
                 decimals = self.cfg.get('default_decimals')
                 await self.exec_sql(sql, user_id, lvl2, ticker.upper(), decimals)
                 await update.message.reply_text(f"{con.STARS} Token contract added!")
@@ -115,7 +112,7 @@ class Tokens(TGBFPlugin):
                     return
 
                 # Delete token from DB
-                sql = await self.get_resource("delete_tokens.sql")
+                sql = await self.get_resource("delete_token.sql")
                 await self.exec_sql(sql,user_id, lvl2)
                 await update.message.reply_text(f"{con.STARS} Token contract removed!")
                 return
@@ -136,9 +133,29 @@ class Tokens(TGBFPlugin):
                         return
 
                     # Update decimal places of a contract
-                    sql = await self.get_resource("update_tokens.sql")
+                    sql = await self.get_resource("update_decimals.sql")
                     await self.exec_sql(sql, int(decimals), user_id, contract)
-                    await update.message.reply_text(f"{con.STARS} Token contract removed!")
+                    await update.message.reply_text(f"{con.STARS} Decimals updated!")
+                    return
+
+            if lvl1 == 'ticker':
+                if ':' in lvl2:
+                    if not await is_contract_present(lvl2.split(':')[0]):
+                        msg = f"{con.ERROR} Contract is unknown!"
+                        await update.message.reply_text(msg)
+                        return
+
+                    contract, ticker = lvl2.split(':')
+
+                    if not ticker:
+                        msg = f"{con.ERROR} Invalid ticker!"
+                        await update.message.reply_text(msg)
+                        return
+
+                    # Update ticker of a contract
+                    sql = await self.get_resource("update_ticker.sql")
+                    await self.exec_sql(sql, ticker, user_id, contract)
+                    await update.message.reply_text(f"{con.STARS} Ticker updated!")
                     return
 
                 else:
@@ -149,3 +166,19 @@ class Tokens(TGBFPlugin):
 
         else:
             await update.message.reply_text(await self.get_info())
+
+    # Check if 'currency' is in the token list and if not, add it
+    async def check_and_insert_currency(self, user_id: int):
+        sql = await self.get_resource('select_by_contract.sql')
+        result = await self.exec_sql(sql, user_id, 'currency')
+
+        if not result['data']:
+            decimals = self.cfg.get('default_decimals')
+            sql = await self.get_resource('insert_token.sql')
+            await self.exec_sql(sql, user_id, 'currency', 'XIAN', decimals)
+
+    # Get all tokens for current user
+    async def get_tokens(self, user_id: int) -> list:
+        sql = await self.get_resource("select_tokens.sql")
+        tokens = await self.exec_sql(sql, user_id)
+        return tokens['data']
