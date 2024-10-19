@@ -28,30 +28,21 @@ class Balance(TGBFPlugin):
         balances = str()
 
         try:
-            # Make sure 'currency' contract is in the list of tokens
-            sql = await self.get_resource('insert_currency.sql', 'tokens')
-            await self.exec_sql(
-                sql,
-                user_id, 'currency', 'XIAN', 4,
-                plugin='tokens'
-            )
+            tokens_plg = self.get_plugin('tokens')
+            await tokens_plg.check_and_insert_currency(user_id)
+            tokens = await tokens_plg.get_tokens(user_id)
 
-            sql = await self.get_resource('select_tokens.sql', 'tokens')
-            tokens = await self.exec_sql(sql, user_id, plugin='tokens')
-
-            for token in tokens['data']:
+            for token in tokens:
                 ticker = token[2]
                 decimals = token[3]
                 balance = xian.get_balance(token[1])
 
-                token_balance = self.format_balance(
-                    ticker, balance, decimals
-                )
+                balance_str = self.format_balance(ticker, balance, decimals)
 
                 if ticker == 'XIAN':
-                    balances = f'<code>{token_balance}</code>\n' + balances
+                    balances = f'<code>{balance_str}</code>\n' + balances
                 else:
-                    balances += f'<code>{token_balance}</code>\n'
+                    balances += f'<code>{balance_str}</code>\n'
 
         except Exception as e:
             await message.edit_text(f"{con.ERROR} {e}")
@@ -64,4 +55,4 @@ class Balance(TGBFPlugin):
 
     # TODO: Remove decimals if not present etc
     def format_balance(self, ticker: str, balance: str | float, decimals: int):
-        return f"{ticker}: {balance:.{decimals}f}".format(ticker=ticker, decimals=decimals, balance=balance)
+        return f"{ticker}: {balance:.{decimals}f}"
