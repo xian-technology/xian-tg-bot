@@ -32,6 +32,14 @@ class Send(TGBFPlugin):
         amount = 0
         to = ''
 
+        if len(context.args) not in (2, 3):
+            await update.message.reply_text(
+                await self.get_info()
+            )
+            return
+
+        message = await update.message.reply_text(f"{con.WAIT} Checking ...")
+
         # Sending XIAN
         if len(context.args) == 2:
             contract = 'currency'
@@ -61,14 +69,8 @@ class Send(TGBFPlugin):
             amount = context.args[1]
             to = context.args[2]
 
-        else:
-            await update.message.reply_text(
-                await self.get_info()
-            )
-            return
-
         if not contract:
-            await update.message.reply_text(
+            await message.edit_text(
                 f'{con.ERROR} Unknown contract. Make sure you added this token to '
                 f'your token list first with <code>/token add contract_name</code>'
             )
@@ -82,22 +84,33 @@ class Send(TGBFPlugin):
                 raise ValueError('Amount can not be negative')
         except:
             msg = f"{con.ERROR} Amount not valid"
-            await update.message.reply_text(msg)
+            await message.edit_text(msg)
             return
 
         if amount.is_integer():
             amount = int(amount)
 
-        # Check if address is valid
-        if not key_is_valid(to):
-            msg = f"{con.ERROR} Not a valid address"
-            await update.message.reply_text(msg)
-            return
-
-        message = await update.message.reply_text(f"{con.WAIT} Sending {ticker} ...")
-
         from_wallet = await self.get_wallet(update.effective_user.id)
         xian = await self.get_xian(from_wallet)
+
+        # Check if recipient is a contract
+        if to.startswith('con_'):
+            contract_data = xian.get_contract_data(to)  # TODO: Test
+
+            if not contract_data:
+                msg = f"{con.ERROR} Contract doesn't exist"
+                await message.edit_text(msg)
+                return
+
+        # Recipient is an address
+        else:
+            # Check if address is valid
+            if not key_is_valid(to):
+                msg = f"{con.ERROR} Not a valid address"
+                await update.message.reply_text(msg)
+                return
+
+        await message.edit_text(f"{con.WAIT} Sending {ticker} ...")
 
         try:
             # Send token
