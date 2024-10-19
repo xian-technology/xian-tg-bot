@@ -19,7 +19,7 @@ class Send(TGBFPlugin):
         if not update.message:
             return
 
-        if len(context.args) < 2:
+        if len(context.args) not in (2, 3):
             await update.message.reply_text(
                 await self.get_info()
             )
@@ -27,16 +27,10 @@ class Send(TGBFPlugin):
 
         user_id = update.message.from_user.id
 
-        contract = ''
-        ticker = ''
-        amount = 0
-        to = ''
-
-        if len(context.args) not in (2, 3):
-            await update.message.reply_text(
-                await self.get_info()
-            )
-            return
+        contract = None
+        ticker = None
+        amount = None
+        to = None
 
         message = await update.message.reply_text(f"{con.WAIT} Checking ...")
 
@@ -49,19 +43,18 @@ class Send(TGBFPlugin):
 
         # Sending token
         elif len(context.args) == 3:
-            sql = await self.get_resource('select_tokens.sql', 'tokens')
-            tokens = await self.exec_sql(sql, user_id, plugin='tokens')
+            tokens = await self.get_plugin('tokens').get_tokens(user_id)
 
             # It is a contract
-            if context.args[0].lower().startswith('con_'):
-                for token in tokens['data']:
+            if context.args[0].lower().startswith(('con_', 'currency')):
+                for token in tokens:
                     if token[1] == context.args[0].lower():
                         contract = token[1]
                         ticker = token[2]
 
             # It is a ticker
             else:
-                for token in tokens['data']:
+                for token in tokens:
                     if token[2] == context.args[0].upper():
                         contract = token[1]
                         ticker = token[2]
@@ -95,10 +88,10 @@ class Send(TGBFPlugin):
 
         # Check if recipient is a contract
         if to.startswith('con_'):
-            contract_data = xian.get_contract_data(to)  # TODO: Test
+            contract_data = xian.get_contract(to)
 
             if not contract_data:
-                msg = f"{con.ERROR} Contract doesn't exist"
+                msg = f"{con.ERROR} Contract doesn't exist!"
                 await message.edit_text(msg)
                 return
 
@@ -106,7 +99,7 @@ class Send(TGBFPlugin):
         else:
             # Check if address is valid
             if not key_is_valid(to):
-                msg = f"{con.ERROR} Not a valid address"
+                msg = f"{con.ERROR} Not a valid address!"
                 await update.message.reply_text(msg)
                 return
 
