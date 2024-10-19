@@ -165,6 +165,7 @@ class TGBFPlugin:
 
         self.log.info(f"Plugin '{self.name}': Endpoint '{name}' removed")
 
+    # TODO: If not in private, remove after certain time
     async def get_info(self, replace: dict = None):
         """
         Return info about the command. Default resource '<plugin>.txt'
