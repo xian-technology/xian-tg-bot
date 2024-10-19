@@ -84,7 +84,7 @@ class Tokens(TGBFPlugin):
                 if lvl2 == 'currency':
                     ticker = 'XIAN'
                 else:
-                    ticker = xian.get_contract_data(
+                    ticker = xian.get_state(
                         lvl2,
                         'metadata',
                         'token_symbol'
