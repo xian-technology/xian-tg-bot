@@ -187,17 +187,17 @@ class Rain(TGBFPlugin):
         # Remove last suffix
         msg = msg[:-len(suffix)]
 
-        contract = self.cfg.get("contract")
-        function = self.cfg.get("function")
+        multisend_contract = self.cfg.get("contract")
+        multisend_function = self.cfg.get("function")
 
         kwargs = {
             "addresses": addresses,
             "amount": amount_single,
-            "contract": "currency"
+            "contract": contract
         }
 
         try:
-            approved_amount = xian.get_approved_amount(contract)
+            approved_amount = xian.get_approved_amount(multisend_contract, token=contract)
             self.log.debug(f'approved amount: {approved_amount}')
         except Exception as e:
             msg = f"GET APPROVED AMOUNT Error: {e}"
@@ -209,7 +209,7 @@ class Rain(TGBFPlugin):
         if approved_amount < amount_total:
             try:
                 # Approve sending tokens to contract
-                approve = xian.approve(contract)
+                approve = xian.approve(multisend_contract, token=contract)
                 self.log.debug(f'approve: {approve}')
 
                 if not approve['success']:
@@ -224,7 +224,7 @@ class Rain(TGBFPlugin):
 
         try:
             # Execute contract to send tokens
-            send = xian.send_tx(contract, function, kwargs)
+            send = xian.send_tx(multisend_contract, multisend_function, kwargs)
             self.log.debug(f'Rain TX: {send}')
         except Exception as e:
             msg = f"SEND Error: {e}"
