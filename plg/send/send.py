@@ -32,7 +32,7 @@ class Send(TGBFPlugin):
         amount = None
         to = None
 
-        message = await update.message.reply_text(f"{con.WAIT} Checking ...")
+        message = await update.message.reply_text(f"{con.WAIT} Preparing ...")
 
         # Sending XIAN
         if len(context.args) == 2:
@@ -51,6 +51,7 @@ class Send(TGBFPlugin):
                     if token[1] == context.args[0].lower():
                         contract = token[1]
                         ticker = token[2]
+                        break
 
             # It is a ticker
             else:
@@ -58,6 +59,7 @@ class Send(TGBFPlugin):
                     if token[2] == context.args[0].upper():
                         contract = token[1]
                         ticker = token[2]
+                        break
 
             amount = context.args[1]
             to = context.args[2]
