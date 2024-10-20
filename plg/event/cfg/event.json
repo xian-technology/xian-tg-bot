@@ -1,5 +1,5 @@
 {
-    "ws_masternode": "wss://testnet.xian.org/websocket",
+    "ws_masternode": null,
     "ws_ping_interval": 10,
     "ws_ping_timeout": 5,
     "ws_reconnect": 10,
