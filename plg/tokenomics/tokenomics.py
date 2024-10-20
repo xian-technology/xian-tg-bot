@@ -15,7 +15,7 @@ class Tokenomics(TGBFPlugin):
         if not update.message:
             return
 
-        msg = await update.message.reply_photo(
+        await update.message.reply_photo(
                 photo=await self.get_img('tokenomics.png'),
                 caption=f"<code>Total Supply: 111.111.111 XIAN</code>"
             )
