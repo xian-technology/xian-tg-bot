@@ -34,7 +34,7 @@ class Balance(TGBFPlugin):
             for token in tokens:
                 ticker = token[2]
                 decimals = token[3]
-                balance = xian.get_balance(token[1])
+                balance = xian.get_balance(contract=token[1])
 
                 balance_str = self.format_balance(ticker, balance, decimals)
 
