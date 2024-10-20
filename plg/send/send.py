@@ -26,6 +26,8 @@ class Send(TGBFPlugin):
             return
 
         user_id = update.message.from_user.id
+        from_wallet = await self.get_wallet(user_id)
+        xian = await self.get_xian(from_wallet)
 
         contract = None
         ticker = None
@@ -85,9 +87,6 @@ class Send(TGBFPlugin):
         if amount.is_integer():
             amount = int(amount)
 
-        from_wallet = await self.get_wallet(update.effective_user.id)
-        xian = await self.get_xian(from_wallet)
-
         # Check if recipient is a contract
         if to.startswith('con_'):
             contract_data = xian.get_contract(to)
@@ -110,6 +109,7 @@ class Send(TGBFPlugin):
         try:
             # Send token
             send = xian.send(amount, to, token=contract)
+            self.log.debug(f'Send TX: {send}')
         except Exception as e:
             msg = f"SEND Error: {e}"
             self.log.error(msg)
