@@ -46,7 +46,7 @@ class Balance(TGBFPlugin):
 
         except Exception as e:
             await message.edit_text(f"{con.ERROR} {e}")
-            msg = f"GET_BALANCE Error: {e}"
+            msg = f"BALANCE Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
             return
