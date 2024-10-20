@@ -121,7 +121,6 @@ class Rain(TGBFPlugin):
 
         chat_id = update.effective_chat.id
 
-        # TODO: Only get messages that do not trigger commands
         # Get all users that messaged until 'last_time'
         sql = await self.get_resource("select_active.sql", plugin="active")
         rain = await self.exec_sql(sql, chat_id, last_time, plugin="active")
