@@ -31,8 +31,11 @@ class Event(TGBFPlugin):
                 if self.cfg.get('ws_masternode'):
                     uri = self.cfg.get('ws_masternode')
                 else:
+                    # Format: wss://<node_address>/websocket
                     uri = self.cfg_global.get('xian', 'node')
-                    uri = uri.replace('http', 'ws') + '/websocket'
+                    uri = uri.replace('https', 'wss')
+                    uri = uri.replace('http', 'wss')
+                    uri += '/websocket'
 
                 async with websockets.connect(uri) as ws:
                     await self.on_open(ws)
