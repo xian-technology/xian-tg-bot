@@ -19,7 +19,6 @@ class Balance(TGBFPlugin):
             return
 
         user_id = update.message.from_user.id
-
         wallet = await self.get_wallet(user_id)
         xian = await self.get_xian(wallet)
 
