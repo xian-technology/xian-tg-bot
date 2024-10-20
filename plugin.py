@@ -515,7 +515,7 @@ class TGBFPlugin:
         return decorator
 
     @classmethod
-    def private(cls, hidden: bool = False):
+    def private(cls, hidden: bool = False, remove_after: int = 10):
         """ Decorator for methods that need to be run in a private chat with the bot """
 
         def decorator(func):
@@ -530,7 +530,10 @@ class TGBFPlugin:
                 if (not hidden) and update.message:
                     name = context.bot.username if context.bot.username else context.bot.name
                     msg = f"{c.ERROR} Use this command in a chat with the bot @{name}"
-                    await update.message.reply_text(msg)
+                    reply = await update.message.reply_text(msg)
+
+                    if remove_after:
+                        await self.remove_msg_after(update.message, reply, after_secs=remove_after)
 
             return _private
         return decorator
