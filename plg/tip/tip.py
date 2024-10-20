@@ -85,7 +85,7 @@ class Tip(TGBFPlugin):
                 raise ValueError('Amount can not be negative')
         except:
             msg = f"{con.ERROR} Amount not valid"
-            await update.message.reply_text(msg)
+            await message.edit_text(msg)
             return
 
         if amount.is_integer():
@@ -97,7 +97,7 @@ class Tip(TGBFPlugin):
         # Get address to which we want to tip
         to_address = (await self.get_wallet(to_user_id)).public_key
 
-        await update.message.edit_text(f"{con.WAIT} Sending...")
+        await message.edit_text(f"{con.WAIT} Sending...")
 
         try:
             # Send token
