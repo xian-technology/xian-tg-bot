@@ -21,15 +21,59 @@ class Rain(TGBFPlugin):
         if not update.message:
             return
 
-        if not context.args or len(context.args) != 2:
-            await update.message.reply_text(await self.get_info())
+        if len(context.args) not in (2, 3):
+            await update.message.reply_text(
+                await self.get_info()
+            )
             return
 
-        wallet = await self.get_wallet(update.effective_user.id)
+        user_id = update.message.from_user.id
+        wallet = await self.get_wallet(user_id)
         xian = await self.get_xian(wallet)
 
-        amount_total = context.args[0]
-        time_frame = context.args[1]
+        contract = None
+        ticker = None
+        amount_total = None
+        time_frame = None
+
+        message = await update.message.reply_text(f"{con.WAIT} Preparing ...")
+
+        # Tipping XIAN
+        if len(context.args) == 2:
+            contract = 'currency'
+            ticker = 'XIAN'
+            amount_total = context.args[0]
+            time_frame = context.args[1]
+
+        # Tipping token
+        elif len(context.args) == 3:
+            tokens = await self.get_plugin('tokens').get_tokens(user_id)
+
+            # It is a contract
+            if context.args[0].lower().startswith(('con_', 'currency')):
+                for token in tokens:
+                    if token[1] == context.args[0].lower():
+                        contract = token[1]
+                        ticker = token[2]
+                        break
+
+            # It is a ticker
+            else:
+                for token in tokens:
+                    if token[2] == context.args[0].upper():
+                        contract = token[1]
+                        ticker = token[2]
+                        break
+
+            amount_total = context.args[1]
+            time_frame = context.args[2]
+
+        if not contract:
+            await message.edit_text(
+                f'{con.ERROR} Unknown contract. Make sure you added this token to '
+                f'your token list first with <code>/token add contract_name</code>'
+            )
+            return
 
         try:
             # Check if amount is valid
@@ -38,8 +82,8 @@ class Rain(TGBFPlugin):
             if amount_total <= 0:
                 raise ValueError('Amount can not be negative')
         except:
-            msg = f"{con.ERROR} Amount not valid"
-            await update.message.reply_text(msg)
+            msg = f"{con.ERROR} Amount not valid!"
+            await message.edit_text(msg)
             return
 
         if amount_total.is_integer():
@@ -48,7 +92,7 @@ class Rain(TGBFPlugin):
         # Check if time unit is included and valid
         if not time_frame.lower().endswith(("m", "h")):
             msg = f"{con.ERROR} Allowed time units are <code>m</code> (minute) and <code>h</code> (hour)"
-            await update.message.reply_text(msg)
+            await message.edit_text(msg)
             return
 
         t_frame = time_frame[:-1]
@@ -61,8 +105,8 @@ class Rain(TGBFPlugin):
             if t_frame <= 0:
                 raise ValueError('Negative values are not allowed')
         except:
-            msg = f"{con.ERROR} Time frame not valid"
-            await update.message.reply_text(msg)
+            msg = f"{con.ERROR} Time frame not valid!"
+            await message.edit_text(msg)
             return
 
         # Determine last valid date time for the airdrop
@@ -72,11 +116,12 @@ class Rain(TGBFPlugin):
             last_time = datetime.utcnow() - timedelta(hours=t_frame)
         else:
             msg = f"{con.ERROR} Unsupported time unit"
-            await update.message.reply_text(msg)
+            await message.edit_text(msg)
             return
 
         chat_id = update.effective_chat.id
 
+        # TODO: Only get messages that do not trigger commands
         # Get all users that messaged until 'last_time'
         sql = await self.get_resource("select_active.sql", plugin="active")
         rain = await self.exec_sql(sql, chat_id, last_time, plugin="active")
@@ -85,19 +130,19 @@ class Rain(TGBFPlugin):
             msg = f"{con.ERROR} Could not determine last active users"
             self.log.error(msg)
             await self.notify(msg)
-            await update.message.reply_text(msg)
+            await message.edit_text(msg)
             return
 
         # Exclude own user from users to airdrop on
-        user_data = [u for u in rain["data"] if u[0] != update.effective_user.id]
+        user_data = [u for u in rain["data"] if u[0] != user_id]
 
         if len(user_data) < 1:
             msg = f"{con.ERROR} No users found for given time frame"
-            await update.message.reply_text(msg)
+            await message.edit_text(msg)
             return
 
         msg = f"{con.RAIN} Initiating rain clouds..."
-        message = await update.message.reply_text(msg)
+        message = await message.edit_text(msg)
 
         # Amount to airdrop to one user
         amount_single = float(f"{(amount_total / len(user_data)):.4f}")
@@ -108,7 +153,7 @@ class Rain(TGBFPlugin):
         if amount_single.is_integer():
             amount_single = int(amount_single)
 
-        msg = f"Rained <code>{amount_single}</code> XIAN each on following users:\n"
+        msg = f"Rained <code>{amount_single}</code> {ticker} each on following users:\n"
 
         suffix = ", "
 
@@ -137,7 +182,7 @@ class Rain(TGBFPlugin):
 
             self.log.info(
                 f"User {to_username} ({to_user_id}) will be "
-                f"rained on with {amount_single} XIAN to wallet {address}")
+                f"rained on with {amount_single} {ticker} to wallet {address}")
 
         # Remove last suffix
         msg = msg[:-len(suffix)]
@@ -155,7 +200,7 @@ class Rain(TGBFPlugin):
             approved_amount = xian.get_approved_amount(contract)
             self.log.debug(f'approved amount: {approved_amount}')
         except Exception as e:
-            msg = f"GET_APPROVED_AMOUNT Error: {e}"
+            msg = f"GET APPROVED AMOUNT Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
@@ -168,7 +213,7 @@ class Rain(TGBFPlugin):
                 self.log.debug(f'approve: {approve}')
 
                 if not approve['success']:
-                    await message.edit_text(f"{con.STOP} Can not approve contract")
+                    await message.edit_text(f"{con.ERROR} Can not approve contract!")
                     return
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
@@ -180,9 +225,9 @@ class Rain(TGBFPlugin):
         try:
             # Execute contract to send tokens
             send = xian.send_tx(contract, function, kwargs)
-            self.log.debug(f'send_tx: {send}')
+            self.log.debug(f'Rain TX: {send}')
         except Exception as e:
-            msg = f"SEND_TX Error: {e}"
+            msg = f"SEND Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
@@ -209,10 +254,10 @@ class Rain(TGBFPlugin):
                         # Notify user about tip
                         await context.bot.send_message(
                             to_user_id,
-                            f"You received <code>{amount_single}</code> XIAN "
+                            f"You received <code>{amount_single}</code> {ticker} "
                             f"from {html.escape(from_username)}\n{link}",
                             disable_web_page_preview=True)
-                        self.log.info(f"User {to_user_id} notified about rain of {amount_single} XIAN")
+                        self.log.info(f"User {to_user_id} notified about rain of {amount_single} {ticker}")
                     except Exception as ex:
                         self.log.warning(f"User {to_user_id} could not be notified about rain: {ex} - {update}")
 
