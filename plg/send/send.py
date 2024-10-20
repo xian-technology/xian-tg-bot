@@ -127,7 +127,7 @@ class Send(TGBFPlugin):
                 link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
                 await message.edit_text(
-                    f"{con.MONEY} Sent <code>{amount}</code> XIAN\n{link}",
+                    f"{con.MONEY} Sent <code>{amount}</code> {ticker}\n{link}",
                     disable_web_page_preview=True
                 )
 
