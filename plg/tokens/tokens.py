@@ -13,6 +13,7 @@ class Tokens(TGBFPlugin):
             await self.exec_sql(sql)
 
         await self.add_handler(CommandHandler(self.handle, self.tokens_callback, block=False))
+        await self.add_handler(CommandHandler('token', self.tokens_callback, block=False))
 
     @TGBFPlugin.logging()
     @TGBFPlugin.private()
