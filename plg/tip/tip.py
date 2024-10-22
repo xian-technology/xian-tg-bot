@@ -73,7 +73,7 @@ class Tip(TGBFPlugin):
         if not contract:
             await message.edit_text(
                 f'{con.ERROR} Unknown contract. Make sure you added this token to '
-                f'your token list first with <code>/token add contract_name</code>'
+                f'your token list first with <code>/tokens add contract_name</code>'
             )
             return
 
