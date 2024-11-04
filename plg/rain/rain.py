@@ -29,7 +29,7 @@ class Rain(TGBFPlugin):
 
         user_id = update.message.from_user.id
         wallet = await self.get_wallet(user_id)
-        xian = await self.get_xian(wallet)
+        xian = await self.get_xian(wallet=wallet)
 
         contract = None
         ticker = None
@@ -71,7 +71,7 @@ class Rain(TGBFPlugin):
         if not contract:
             await message.edit_text(
                 f'{con.ERROR} Unknown contract. Make sure you added this token to '
-                f'your token list first with <code>/token add contract_name</code>'
+                f'your token list first with <code>/tokens add contract_name</code>'
             )
             return
 

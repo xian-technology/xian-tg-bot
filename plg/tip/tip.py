@@ -92,7 +92,7 @@ class Tip(TGBFPlugin):
             amount = int(amount)
 
         from_wallet = await self.get_wallet(from_user_id)
-        xian = await self.get_xian(from_wallet)
+        xian = await self.get_xian(wallet=from_wallet)
 
         # Get address to which we want to tip
         to_address = (await self.get_wallet(to_user_id)).public_key

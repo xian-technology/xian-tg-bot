@@ -20,7 +20,7 @@ class Balance(TGBFPlugin):
 
         user_id = update.message.from_user.id
         wallet = await self.get_wallet(user_id)
-        xian = await self.get_xian(wallet)
+        xian = await self.get_xian(wallet=wallet)
 
         message = await update.message.reply_text(f"{con.WAIT} Retrieving balances ...")
 
@@ -33,7 +33,7 @@ class Balance(TGBFPlugin):
 
             for token in tokens:
                 ticker = token[2]
-                decimals = token[3]
+                decimals = token[3]#
                 balance = xian.get_balance(contract=token[1])
 
                 balance_str = self.format_balance(ticker, balance, decimals)

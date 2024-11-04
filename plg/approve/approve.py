@@ -38,7 +38,7 @@ class Approve(TGBFPlugin):
         message = await update.message.reply_text(f"{con.WAIT} Approving contract...")
 
         wallet = await self.get_wallet(update.effective_user.id)
-        xian = await self.get_xian(wallet)
+        xian = await self.get_xian(wallet=wallet)
 
         try:
             # Approve contract

@@ -27,7 +27,7 @@ class Send(TGBFPlugin):
 
         user_id = update.message.from_user.id
         from_wallet = await self.get_wallet(user_id)
-        xian = await self.get_xian(from_wallet)
+        xian = await self.get_xian(wallet=from_wallet)
 
         contract = None
         ticker = None

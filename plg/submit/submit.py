@@ -61,7 +61,7 @@ class Submit(TGBFPlugin):
         code = contract_bytes.getvalue().decode('utf-8')
 
         from_wallet = await self.get_wallet(update.effective_user.id)
-        xian = await self.get_xian(from_wallet)
+        xian = await self.get_xian(wallet=from_wallet)
 
         try:
             deploy = xian.submit_contract(name, code)
