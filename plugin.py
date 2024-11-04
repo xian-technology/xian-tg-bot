@@ -763,6 +763,8 @@ class TGBFPlugin:
         xian = Xian(node, chain_id, wallet)
 
         if chain_id is None:
-            self.cfg_global.set(xian.chain_id, 'xian', 'chain_id')
+            global_node = self.cfg_global.get('xian', 'node')
+            if global_node == node:
+                self.cfg_global.set(xian.chain_id, 'xian', 'chain_id')
 
         return xian
