@@ -31,10 +31,16 @@ class Event(TGBFPlugin):
                 if self.cfg.get('ws_masternode'):
                     uri = self.cfg.get('ws_masternode')
                 else:
-                    # Format: wss://<node_address>/websocket
                     uri = self.cfg_global.get('xian', 'node')
-                    uri = uri.replace('https', 'wss')
-                    uri = uri.replace('http', 'wss')
+
+                    if uri.startswith('https://'):
+                        uri = uri.replace('https://', 'wss://')
+                    elif uri.startswith('http://'):
+                        uri = uri.replace('http://', 'ws://')
+                    else:
+                        self.log.error("Unsupported URI scheme in node URL.")
+                        return  # Or handle the error appropriately
+
                     uri += '/websocket'
 
                 async with websockets.connect(uri) as ws:
