@@ -2,6 +2,7 @@ import os
 import sqlite3
 import inspect
 import asyncio
+import pickledb
 
 import constants as c
 import utils as utl
@@ -9,6 +10,7 @@ import utils as utl
 from pathlib import Path
 from loguru import logger
 from functools import wraps
+from pickledb import PickleDB
 from xian_py.xian import Xian
 from xian_py.wallet import Wallet
 from telegram.constants import ChatAction
@@ -275,6 +277,37 @@ class TGBFPlugin:
             when,
             data=data,
             name=name if name else (self.name + "_" + utl.random_id()))
+
+    def _get_kv(self, plugin="", db_name="") -> PickleDB:
+        if db_name:
+            if not db_name.lower().endswith(".kv"):
+                db_name += ".kv"
+        else:
+            if plugin:
+                db_name = plugin + ".kv"
+            else:
+                db_name = self.name + ".kv"
+
+        plugin = plugin if plugin else self.name
+        db_path = Path(self.get_dat_path(plugin=plugin) / db_name)
+
+        return pickledb.load(db_path, True)
+
+    def kv_set(self, key, value, plugin="", db_name=""):
+        kv_db = self._get_kv(plugin, db_name)
+        return kv_db.set(key, value)
+
+    def kv_get(self, key, plugin="", db_name=""):
+        kv_db = self._get_kv(plugin, db_name)
+        return kv_db.get(key)
+
+    def kv_all(self, plugin="", db_name=""):
+        kv_db = self._get_kv(plugin, db_name)
+        return kv_db.getall()
+
+    def kv_del(self, key, plugin="", db_name=""):
+        kv_db = self._get_kv(plugin, db_name)
+        return kv_db.rem(key)
 
     async def exec_sql_global(self, sql, *args, db_name=""):
         """ Execute raw SQL statement on the global
