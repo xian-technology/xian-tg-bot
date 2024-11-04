@@ -1,13 +1,14 @@
 [tool.poetry]
 name = "tg-bot"
-version = "0.1.0"
+version = "0.2.1"
 description = ""
 authors = ["endogen"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-python-telegram-bot = {extras = ["job-queue"], version = "^21.1"}
+python-telegram-bot = {extras = ["job-queue"], version = "^21.6"}
 requests = "^2.31.0"
 python-dotenv = "^1.0.1"
 loguru = "^0.7.2"
@@ -20,8 +21,9 @@ plotly = "^5.18.0"
 pytrends = "^4.9.2"
 kaleido = "0.2.1"
 numpy = "^1.26.4"
-xian-py = "^0.2.0"
+xian-py = "^0.2.1"
 websockets = "^12.0"
+pickledb = "^0.9.2"
 
 
 [build-system]
