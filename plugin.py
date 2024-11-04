@@ -16,7 +16,6 @@ from telegram import Chat, Update, Message
 from typing import Tuple, Dict, Callable, Any, BinaryIO
 from telegram.ext import CallbackContext, BaseHandler, Job
 from datetime import datetime, timedelta
-from loguru._logger import Logger
 from config import ConfigManager
 from main import TelegramBot
 
@@ -695,7 +694,7 @@ class TGBFPlugin:
         return decorator
 
     async def get_wallet(self, user_id, db_name="global.db") -> Wallet:
-        """ Return address and privkey for given user_id.
+        """ Return address and private key for given user_id.
         If no wallet exists then it will be created. """
 
         # Check if user already has a wallet
@@ -720,7 +719,12 @@ class TGBFPlugin:
         self.log.info(f'Address {wallet.public_key} created for user ID {user_id}')
         return wallet
 
-    async def get_xian(self, wallet: Wallet = None) -> Xian:
-        node_url = self.cfg_global.get('xian', 'node')
-        chain_id = self.cfg_global.get('xian', 'chain_id')
-        return Xian(node_url, chain_id, wallet)
+    async def get_xian(self, node: str = None, chain_id: str = None, wallet: Wallet = None) -> Xian:
+        """ Return a Xian Network node instance """
+
+        if node is None:
+            node = self.cfg_global.get('xian', 'node')
+        if chain_id is None:
+            chain_id = self.cfg_global.get('xian', 'chain_id')
+
+        return Xian(node, chain_id, wallet)
