@@ -31,6 +31,9 @@ class Testnet(TGBFPlugin):
 
         testnet = await self.get_xian(testnet_node, chain_id, from_wallet)
 
+        if chain_id is None:
+            self.cfg.set('chain_id', testnet.chain_id)
+
         balance = testnet.get_balance(to_address)
         threshold = self.cfg.get('threshold')
 
