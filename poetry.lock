@@ -1042,13 +1042,13 @@ cli = ["click (>=5.0)"]
 
 [[package]]
 name = "python-telegram-bot"
-version = "21.6"
+version = "21.7"
 description = "We have made you a wrapper you can't refuse"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "python_telegram_bot-21.6-py3-none-any.whl", hash = "sha256:f2d6431bf154a53f40cdfc6c1d492a66102c0e4938709f6d8202bcd951c840cb"},
-    {file = "python_telegram_bot-21.6.tar.gz", hash = "sha256:8b2b37836c3ff9c2924e990474a1c4731df21b1668acebff5099f475666426c6"},
+    {file = "python_telegram_bot-21.7-py3-none-any.whl", hash = "sha256:aff1d7245f1b0d4d12d41c9acff74e86d7100713c2204cd02ff17f8d80d18846"},
+    {file = "python_telegram_bot-21.7.tar.gz", hash = "sha256:bc8537b77ae02531fc2ad440caafc023fd13f13cf19e592dfa1a9ff84988a012"},
 ]
 
 [package.dependencies]
@@ -1369,13 +1369,13 @@ dev = ["black (>=19.3b0)", "pytest (>=4.6.2)"]
 
 [[package]]
 name = "xian-py"
-version = "0.2.3"
+version = "0.2.4"
 description = "Python tools to interact with the Xian blockchain"
 optional = false
 python-versions = "<4.0,>=3.11"
 files = [
-    {file = "xian_py-0.2.3-py3-none-any.whl", hash = "sha256:0eba6a0c567ce5f2fabfe77ecb4d67be8558e6dd74aad542d8798e6908e591c1"},
-    {file = "xian_py-0.2.3.tar.gz", hash = "sha256:c3d03b7451701694460ca0a785cfccd8e8129eba73d35f052ca1fae4b3e1e7c3"},
+    {file = "xian_py-0.2.4-py3-none-any.whl", hash = "sha256:1bdacb87b0519e8171c6a9984b61bdc202207d3a1ccb670d30a152793204fa8a"},
+    {file = "xian_py-0.2.4.tar.gz", hash = "sha256:07cb226cec69fa6d3ca1d8cef86e017d6ba675f195878362a50f2dc328c5e52f"},
 ]
 
 [package.dependencies]
