@@ -1,0 +1,19 @@
+<b>Simulate a transaction by providing the transaction payload as JSON. The returned result matches the result of the real transaction.</b>
+
+◾️ Simulate a transaction
+<code>
+/{{handle}}
+{
+    'chain_id': 'some-chain-id',
+    'contract': 'currency',
+    'function': 'transfer',
+    'kwargs':
+    {
+        'amount': 1.11,
+        'to': '8bf2 ... 3819'
+    },
+    'nonce': 21,
+    'sender': 'aa06 ... 49f9',
+    'stamps_supplied': 0
+}
+</code>
