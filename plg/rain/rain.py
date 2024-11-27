@@ -4,7 +4,7 @@ import constants as con
 
 from plugin import TGBFPlugin
 from telegram import Update
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from telegram.ext import CallbackContext, CommandHandler
 
 
@@ -111,9 +111,9 @@ class Rain(TGBFPlugin):
 
         # Determine last valid date time for the airdrop
         if t_unit == "m":
-            last_time = datetime.utcnow() - timedelta(minutes=t_frame)
+            last_time = datetime.now(timezone.utc) - timedelta(minutes=t_frame)
         elif t_unit == "h":
-            last_time = datetime.utcnow() - timedelta(hours=t_frame)
+            last_time = datetime.now(timezone.utc) - timedelta(hours=t_frame)
         else:
             msg = f"{con.ERROR} Unsupported time unit"
             await message.edit_text(msg)
