@@ -5,7 +5,7 @@ from starlette.responses import JSONResponse
 class Api(TGBFPlugin):
 
     async def init(self):
-        await self.add_endpoint('/address/{address_id}', self.address)
+        await self.add_endpoint('/address/{telegram_id}', self.address)
 
     async def address(self, telegram_id: str):
         try:
