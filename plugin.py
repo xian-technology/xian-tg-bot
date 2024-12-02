@@ -290,6 +290,7 @@ class TGBFPlugin:
 
         plugin = plugin if plugin else self.name
         db_path = Path(self.get_dat_path(plugin=plugin) / db_name)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
 
         return pickledb.load(db_path, True)
 
