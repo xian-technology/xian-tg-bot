@@ -1,4 +1,5 @@
 import os
+import re
 
 import utils as utl
 import constants as con
@@ -27,8 +28,6 @@ class Lottery(TGBFPlugin):
             )
             return
 
-        message = await update.message.reply_text(f"{con.WAIT} Preparing ...")
-
         user_id = update.message.from_user.id
         wallet = await self.get_wallet(user_id)
         xian = await self.get_xian(wallet=wallet)
@@ -51,8 +50,10 @@ class Lottery(TGBFPlugin):
 
         # Validate contract
         if token_contract != 'currency' and not token_contract.startswith('con_'):
-            msg = f"{con.ERROR} Contract needs to be 'currency' or start with 'con_'"
-            await message.edit_text(msg)
+            await context.bot.send_message(
+                update.message.chat_id,
+                f"{con.ERROR} Contract needs to be 'currency' or start with 'con_'"
+            )
             return
 
         # Validate amount
@@ -65,8 +66,10 @@ class Lottery(TGBFPlugin):
             if amount.is_integer():
                 amount = int(amount)
         except Exception as e:
-            msg = f"{con.ERROR} {e}"
-            await message.edit_text(msg)
+            await context.bot.send_message(
+                update.message.chat_id,
+                f"{con.ERROR} {e}"
+            )
             return
 
         try:
@@ -76,7 +79,10 @@ class Lottery(TGBFPlugin):
             msg = f"GET APPROVED AMOUNT Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await context.bot.send_message(
+                update.message.chat_id,
+                f"{con.ERROR} {e}"
+            )
             return
 
         if approved_amount < amount:
@@ -86,13 +92,19 @@ class Lottery(TGBFPlugin):
                 self.log.debug(f'approve: {approve}')
 
                 if not approve['success']:
-                    await message.edit_text(f"{con.ERROR} Can not approve contract!")
+                    await context.bot.send_message(
+                        update.message.chat_id,
+                        f"{con.ERROR} Can not approve contract!"
+                    )
                     return
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
                 self.log.error(msg)
                 await self.notify(msg)
-                await message.edit_text(f"{con.ERROR} {e}")
+                await context.bot.send_message(
+                    update.message.chat_id,
+                    f"{con.ERROR} {e}"
+                )
                 return
 
         kwargs = {
@@ -102,37 +114,47 @@ class Lottery(TGBFPlugin):
         }
 
         try:
-            # Execute contract to send tokens
+            # Execute contract to start lottery
             send = xian.send_tx(lottery_contract, 'lottery_start', kwargs)
             self.log.debug(f'Lottery Start TX: {send}')
         except Exception as e:
             msg = f"Lottery Start Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await context.bot.send_message(
+                update.message.chat_id,
+                f"{con.ERROR} {e}"
+            )
             return
 
         tx_hash = send['tx_hash']
 
         async def tx_result(success: str, result: str):
-            if not success:
-                await message.edit_text(f"{con.STOP} {result}")
-            else:
+            if success:
                 explorer_url = self.cfg_global.get('xian', 'explorer')
                 link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction on Explorer</a>'
 
                 from_user = update.message.from_user
                 creator = "@" + from_user.username if from_user.username else from_user.first_name
+                creator = creator if creator.startswith('@') else f'<code>{creator}</code>'
 
-                await message.delete()
+                ticker = xian.get_state(
+                    token_contract,
+                    'metadata',
+                    'token_symbol'
+                )
 
-                # TODO: Replace contract name with ticker
+                token = ticker if ticker else token_contract
+
                 msg = (f'{con.LUCK} <b>New Lottery started!</b>\n\n'
-                       f'Lottery-ID: <code>{lottery_id}</code>\n'
-                       f'From User:  {creator}\n'
-                       f'Deposited:  <code>{amount}</code> <code>{token_contract}</code>\n\n'
+                       f'<code>LotteryID:</code> <code>{lottery_id}</code>\n'
+                       f'<code>From User:</code> {creator}\n'
+                       f'<code>Deposited:</code> <code>{amount}</code> <code>{token}</code>\n'
+                       f'<code>User Pool:</code> <code>0</code>\n\n'
                        f'By pressing the button "Participate!" you take part in the lottery '
                        f'and have a chance to win the deposited amount!')
+
+                self.kv_set(str(lottery_id), msg)
 
                 banner = os.path.join(self.get_res_path(), "banner.jpg")
 
@@ -142,11 +164,19 @@ class Lottery(TGBFPlugin):
                     caption=f'{msg}\n\n{link}',
                     reply_markup=self.lottery_buttons(lottery_id)
                 )
+            else:
+                await context.bot.send_message(
+                    update.message.chat_id,
+                    f"{con.STOP} {result}"
+                )
 
-        if not send['success']:
-            await message.edit_text(f"{con.STOP} {send['message']}")
-        else:
+        if send['success']:
             await self.plugins['event'].track_tx(tx_hash, tx_result)
+        else:
+            await context.bot.send_message(
+                update.message.chat_id,
+                f"{con.STOP} {send['message']}"
+            )
 
     def lottery_buttons(self, lottery_id: int):
         menu = utl.build_menu(
@@ -158,6 +188,15 @@ class Lottery(TGBFPlugin):
                  f"{con.FINISH} End (only creator)",
                  callback_data=f'{self.name}_{lottery_id}_end'
              )], 2
+        )
+        return InlineKeyboardMarkup(menu)
+
+    def lottery_end_button(self, url: str):
+        menu = utl.build_menu(
+            [InlineKeyboardButton(
+                f"{con.MONEY} Lottery ended! View winner {con.MONEY}",
+                url=url
+            )]
         )
         return InlineKeyboardMarkup(menu)
 
@@ -181,7 +220,6 @@ class Lottery(TGBFPlugin):
         # Since we don't have that combination of data otherwise
         self.kv_set(wallet.public_key, username)
 
-        # TODO: Update original message with number of users
         # PARTICIPATE in lottery
         if lottery_command == 'add':
             try:
@@ -202,6 +240,14 @@ class Lottery(TGBFPlugin):
                         await update.callback_query.message.reply_text(
                             f'{con.GREEN_HEART} User {username} participates in the lottery. {link}',
                             disable_web_page_preview=True
+                        )
+                        old_msg = self.kv_get(str(lottery_id))
+                        new_msg = self.update_user_pool(old_msg)
+                        self.kv_set(str(lottery_id), new_msg)
+
+                        await update.callback_query.message.edit_caption(
+                            new_msg,
+                            reply_markup=self.lottery_buttons(lottery_id)
                         )
                     else:
                         await update.callback_query.message.reply_text(
@@ -261,11 +307,14 @@ class Lottery(TGBFPlugin):
                         else:
                             winner = '<code>' + winner_address[:6] + '...' + '</code>'
 
-                        # TODO: Edit original message with winner
-
                         await update.callback_query.message.reply_text(
                             f'{con.GREEN_HEART} Lottery ended and {winner} won! {link}',
                             disable_web_page_preview=True
+                        )
+                        await update.callback_query.message.edit_reply_markup(
+                            reply_markup=self.lottery_end_button(
+                                f"{explorer_url}/tx/{tx_hash}"
+                            )
                         )
                     else:
                         await update.callback_query.message.reply_text(
@@ -305,3 +354,18 @@ class Lottery(TGBFPlugin):
                 update.callback_query.id,
                 f"{con.ERROR} Something went wrong..."
             )
+
+    # Function to update the "User Pool" value
+    def update_user_pool(self, msg):
+        # Regex to match the "User Pool" value
+        pattern = r'(<code>User Pool:</code> <code>)(\d+)(</code>)'
+
+        # Function to increment the matched value
+        def replacer(match):
+            current_value = int(match.group(2))  # Extract the integer value
+            new_value = current_value + 1  # Increment it by 1
+            return f'{match.group(1)}{new_value}{match.group(3)}'  # Reconstruct the string
+
+        # Replace the old value with the updated value
+        updated_msg = re.sub(pattern, replacer, msg)
+        return updated_msg
