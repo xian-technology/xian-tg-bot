@@ -152,7 +152,7 @@ if __name__ == "__main__":
     if log_into_file:
         logger.add(
             Path(Path('log') / Path('{time}.log')),
-            format="{time} {name} {message}",
+            format="{time} {level} {name} {message}",
             level=log_level,
             rotation="5 MB"
         )
