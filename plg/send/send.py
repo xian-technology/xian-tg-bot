@@ -3,7 +3,6 @@ import constants as con
 from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-from xian_py.wallet import key_is_valid
 
 
 class Send(TGBFPlugin):
@@ -99,7 +98,7 @@ class Send(TGBFPlugin):
         # Recipient is an address
         else:
             # Check if address is valid
-            if not key_is_valid(to):
+            if not from_wallet.is_valid_key(to):
                 msg = f"{con.ERROR} Not a valid address!"
                 await update.message.reply_text(msg)
                 return
