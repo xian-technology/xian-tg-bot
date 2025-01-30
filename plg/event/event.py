@@ -5,7 +5,7 @@ import gc
 
 from plugin import TGBFPlugin
 from functools import partial
-from xian_py.utils import decode_str
+from xian_py.encoding import decode_str
 from typing import Callable
 
 
