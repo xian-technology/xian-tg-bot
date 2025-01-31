@@ -1,5 +1,5 @@
-import os
-import signal
+import sys
+import asyncio
 import constants as con
 
 from telegram import Update
@@ -25,4 +25,13 @@ class Shutdown(TGBFPlugin):
         await update.message.reply_text(msg)
         self.log.info(msg)
 
-        os.kill(os.getpid(), signal.SIGTERM)
+        # First stop the bot and webserver gracefully
+        if self.tgb.web:
+            await self.tgb.web.stop()
+        if self.tgb.bot:
+            await self.tgb.bot.stop()
+            await self.tgb.bot.shutdown()
+
+        # Schedule actual shutdown after a small delay to allow message to be sent
+        await asyncio.sleep(1)
+        sys.exit(0)
