@@ -1,4 +1,3 @@
-import sys
 import asyncio
 import constants as con
 
@@ -17,7 +16,6 @@ class Shutdown(TGBFPlugin):
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def shutdown_callback(self, update: Update, context: CallbackContext):
-        # Don't deal with edited messages
         if not update.message:
             return
 
@@ -25,13 +23,10 @@ class Shutdown(TGBFPlugin):
         await update.message.reply_text(msg)
         self.log.info(msg)
 
-        # First stop the bot and webserver gracefully
-        if self.tgb.web:
-            await self.tgb.web.stop()
-        if self.tgb.bot:
-            await self.tgb.bot.stop()
-            await self.tgb.bot.shutdown()
+        # Schedule shutdown with a small delay to ensure message is sent
+        asyncio.create_task(self.delayed_shutdown(0.5))
 
-        # Schedule actual shutdown after a small delay to allow message to be sent
-        await asyncio.sleep(1)
-        sys.exit(0)
+    async def delayed_shutdown(self, delay: float):
+        """Execute shutdown after a short delay"""
+        await asyncio.sleep(delay)
+        await self.tgb.shutdown()

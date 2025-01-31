@@ -1,5 +1,4 @@
 import os
-import signal
 import sys
 import asyncio
 import importlib
@@ -17,58 +16,134 @@ from web import WebAppWrapper
 
 
 class TelegramBot:
-
     def __init__(self):
         self.bot = None
         self.cfg = None
         self.web = None
         self.plugins = dict()
+        self._stopping = False
 
-    async def run(self, config: ConfigManager, token: str):
-        self.cfg = config
+    async def cancel_pending_tasks(self):
+        """Cancel all pending tasks except the current one"""
+        current_task = asyncio.current_task()
+        pending = [task for task in asyncio.all_tasks()
+                   if task is not current_task and not task.done()]
 
-        # Init bot
-        self.bot = (
-            Application.builder()
-            .defaults(Defaults(parse_mode=ParseMode.HTML))
-            .token(token)
-            .build()
-        )
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.debug(f"Error canceling task {task.get_name()}: {e}")
 
-        # Init webserver
-        self.web = WebAppWrapper(
-            res_path=con.DIR_RES,
-            port=self.cfg.get('webserver_port')
-        )
-
-        # Load all plugins
-        await self.load_plugins()
-
-        try:
-            # Notify admin about bot start
-            await self.bot.updater.bot.send_message(
-                chat_id=self.cfg.get('admin_tg_id'),
-                text=f'{con.ROBOT} Bot is up and running!'
-            )
-        except InvalidToken:
-            logger.error('Invalid Telegram bot token')
+    async def shutdown(self):
+        """Graceful shutdown sequence"""
+        if self._stopping:
             return
 
+        self._stopping = True
+        logger.info("Starting shutdown sequence")
+
         try:
-            async with self.bot:
-                logger.info("Initialize bot...")
-                await self.bot.initialize()
-                logger.info("Starting bot...")
-                await self.bot.start()
-                logger.info("Polling for updates...")
-                await self.bot.updater.start_polling(drop_pending_updates=True)
-                logger.info("Starting webserver...")
-                await self.web.run().serve()
-        except:
-            os.kill(os.getpid(), signal.SIGTERM)
+            # First stop the bot application and updater
+            if self.bot:
+                logger.info("Stopping bot and updater...")
+                try:
+                    # Stop the bot application first
+                    await self.bot.stop()
+                    # Then stop the updater
+                    if self.bot.updater:
+                        await self.bot.updater.stop()
+                    # Finally shutdown the application
+                    await self.bot.shutdown()
+                except Exception as e:
+                    logger.debug(f"Bot stop error (can be ignored): {e}")
+
+                await asyncio.sleep(0.5)  # Give it time to clean up
+
+            # Then stop the webserver
+            if self.web:
+                logger.info("Stopping webserver...")
+                await self.web.stop()
+                await asyncio.sleep(0.5)  # Give it time to clean up
+
+            # Clean up plugins
+            if self.plugins:
+                logger.info("Cleaning up plugins...")
+                plugin_names = list(self.plugins.keys())
+                for name in plugin_names:
+                    try:
+                        await self.disable_plugin(name)
+                    except Exception as e:
+                        logger.error(f"Error disabling plugin {name}: {e}")
+
+            # Cancel any remaining tasks
+            logger.info("Canceling remaining tasks...")
+            await self.cancel_pending_tasks()
+
+            logger.info("Shutdown complete")
+            await asyncio.sleep(1)  # Give final logs time to be written
+
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+        finally:
+            os._exit(0)
+
+    async def run(self, config: ConfigManager, token: str):
+        """Main bot execution loop"""
+        try:
+            self.cfg = config
+
+            # Init bot
+            self.bot = (
+                Application.builder()
+                .defaults(Defaults(parse_mode=ParseMode.HTML))
+                .token(token)
+                .build()
+            )
+
+            # Init webserver
+            self.web = WebAppWrapper(
+                res_path=con.DIR_RES,
+                port=self.cfg.get('webserver_port')
+            )
+
+            # Load all plugins
+            await self.load_plugins()
+
+            try:
+                # Notify admin about bot start
+                await self.bot.updater.bot.send_message(
+                    chat_id=self.cfg.get('admin_tg_id'),
+                    text=f'{con.ROBOT} Bot is up and running!'
+                )
+            except InvalidToken:
+                logger.error('Invalid Telegram bot token')
+                await self.shutdown()
+                return
+
+            try:
+                async with self.bot:
+                    logger.info("Initialize bot...")
+                    await self.bot.initialize()
+                    logger.info("Starting bot...")
+                    await self.bot.start()
+                    logger.info("Polling for updates...")
+                    await self.bot.updater.start_polling(drop_pending_updates=True)
+                    logger.info("Starting webserver...")
+                    await self.web.run().serve()
+            except Exception as e:
+                logger.error(f"Error in bot execution: {e}")
+                await self.shutdown()
+
+        except Exception as e:
+            logger.error(f"Critical error in main loop: {e}")
+            await self.shutdown()
 
     async def load_plugins(self):
-        """ Load all plugins from the 'plg' folder """
+        """Load all plugins from the 'plg' folder"""
         try:
             for _, folders, _ in os.walk(con.DIR_PLG):
                 for folder in folders:
@@ -78,10 +153,11 @@ class TelegramBot:
                     await self.enable_plugin(folder)
                 break
         except Exception as e:
-            logger.error(e)
+            logger.error(f"Error loading plugins: {e}")
+            raise
 
     async def enable_plugin(self, name):
-        """ Load a single plugin """
+        """Load a single plugin"""
         # If already enabled, disable first
         await self.disable_plugin(name)
 
@@ -103,33 +179,48 @@ class TelegramBot:
             return False, str(e)
 
     async def disable_plugin(self, name):
-        """ Remove a plugin from the plugin list and also
-         remove all its handlers and endpoints """
+        """Remove a plugin and cleanup its resources"""
         if name in self.plugins:
             plugin = self.plugins[name]
 
-            # Run plugin's own cleanup method
-            await plugin.cleanup()
+            try:
+                # Run plugin's own cleanup method
+                await plugin.cleanup()
 
-            # Remove plugin handlers
-            for group, handler in plugin.handlers.items():
-                self.bot.remove_handler(handler, group)
-            plugin.handlers.clear()
+                # Remove plugin handlers
+                handlers = list(plugin.handlers.items())
+                for group, handler in handlers:
+                    try:
+                        self.bot.remove_handler(handler, group)
+                    except Exception as e:
+                        logger.debug(f"Error removing handler: {e}")
+                plugin.handlers.clear()
 
-            # Remove plugin endpoints
-            for endpoint in plugin.endpoints:
-                self.web.remove_endpoint(endpoint)
-            plugin.endpoints.clear()
+                # Remove plugin endpoints
+                endpoints = list(plugin.endpoints)
+                for endpoint in endpoints:
+                    try:
+                        self.web.remove_endpoint(endpoint)
+                    except Exception as e:
+                        logger.debug(f"Error removing endpoint: {e}")
+                plugin.endpoints.clear()
 
-            # Remove all plugin references
-            del sys.modules[f"{con.DIR_PLG}.{name}.{name}"]
-            del sys.modules[f"{con.DIR_PLG}.{name}"]
-            del self.plugins[name]
-            del plugin
+                # Remove all plugin references
+                try:
+                    del sys.modules[f"{con.DIR_PLG}.{name}.{name}"]
+                    del sys.modules[f"{con.DIR_PLG}.{name}"]
+                    del self.plugins[name]
+                    del plugin
+                except Exception as e:
+                    logger.debug(f"Error cleaning plugin references: {e}")
 
-            msg = f"Plugin '{name}' disabled"
-            logger.info(msg)
-            return True, msg
+                msg = f"Plugin '{name}' disabled"
+                logger.info(msg)
+                return True, msg
+
+            except Exception as e:
+                logger.error(f"Error disabling plugin {name}: {e}")
+                return False, str(e)
 
 
 if __name__ == "__main__":
@@ -137,8 +228,8 @@ if __name__ == "__main__":
     load_dotenv()
 
     # Read parameters from .env file
-    log_level = os.getenv('LOG_LEVEL') if os.getenv('LOG_LEVEL') else 'INFO'
-    log_into_file = os.getenv('LOG_INTO_FILE') if os.getenv('LOG_INTO_FILE') else True
+    log_level = os.getenv('LOG_LEVEL', 'INFO')
+    log_into_file = os.getenv('LOG_INTO_FILE', 'true').lower() == 'true'
 
     # Remove standard logger
     logger.remove()
@@ -146,7 +237,8 @@ if __name__ == "__main__":
     # Add new loguru logger
     logger.add(
         sys.stderr,
-        level=log_level)
+        level=log_level
+    )
 
     # Save log in file
     if log_into_file:
