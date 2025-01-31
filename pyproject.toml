@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "tg-bot"
-version = "0.2.2"
-description = ""
+version = "0.2.3"
+description = "Xian Network Telegram Bot"
 authors = ["endogen"]
 readme = "README.md"
 package-mode = false
