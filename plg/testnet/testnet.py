@@ -15,17 +15,148 @@ class Testnet(TGBFPlugin):
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def testnet_callback(self, update: Update, context: CallbackContext):
-        # Don't deal with edited messages
         if not update.message:
             return
 
         user_id = update.message.from_user.id
-        to_wallet = await self.get_wallet(user_id)
-        to_address = to_wallet.public_key
+        user_wallet = await self.get_wallet(user_id)
 
+        if len(context.args) == 0:
+            # Show help text for no arguments
+            await update.message.reply_text(
+                await self.get_info()
+            )
+            return
+
+        # Check for claim command
+        if context.args[0].lower() == "claim":
+            await self.handle_claim(update, user_wallet)
+            return
+
+        # Check for send command
+        if context.args[0].lower() == "send":
+            if len(context.args) != 3:
+                await update.message.reply_text(
+                    f"To send tokens, use:\n"
+                    f"<code>/testnet send [amount] [address]</code>"
+                )
+                return
+
+            try:
+                amount = float(context.args[1])
+                if amount <= 0:
+                    await update.message.reply_text(f"{con.ERROR} Amount must be greater than 0")
+                    return
+            except ValueError:
+                await update.message.reply_text(f"{con.ERROR} Invalid amount")
+                return
+
+            to_address = context.args[2]
+            await self.handle_send(update, user_wallet, amount, to_address)
+            return
+
+        # If arguments provided but not in correct format
+        await update.message.reply_text(
+            await self.get_info()
+        )
+
+    async def handle_claim(self, update: Update, user_wallet: Wallet):
+        """Handle claiming tokens to user's bot wallet"""
+        message = await update.message.reply_text(f"{con.WAIT} Processing claim request...")
+
+        try:
+            # Get testnet instance with faucet wallet
+            testnet = await self.get_testnet_instance()
+
+            # Check if user can claim
+            user_address = user_wallet.public_key
+            await self.validate_claim(testnet, user_address)
+
+            # Amount to send
+            amount = self.cfg.get('amount')
+
+            try:
+                # Send testnet XIAN from faucet to user
+                send = testnet.send(amount, user_address)
+                self.log.debug(f'Claim TX: {send}')
+            except Exception as e:
+                msg = f"CLAIM Error: {e}"
+                self.log.error(msg)
+                await self.notify(msg)
+                await message.edit_text(f"{con.ERROR} {str(e)}")
+                return
+
+            # Save claim time
+            tz = timezone.utc
+            current_dt_str = datetime.now(tz=tz).strftime("%Y-%m-%dT%H:%M:%S")
+            self.kv_set(user_address, current_dt_str)
+
+            await message.edit_text(
+                f"{con.INFO} Claimed {amount} tXIAN to your bot wallet\n"
+                f"<code>{user_address}</code>"
+            )
+
+        except ValueError as e:
+            await message.edit_text(f"{con.ERROR} {str(e)}")
+        except Exception as e:
+            self.log.error(f"Unexpected error: {e}")
+            await self.notify(e)
+            await message.edit_text(f"{con.ERROR} An unexpected error occurred")
+
+    async def handle_send(self, update: Update, from_wallet: Wallet, amount: float, to_address: str):
+        """Handle sending tokens from user's bot wallet to another address"""
+        message = await update.message.reply_text(f"{con.WAIT} Processing send request...")
+
+        try:
+            # Get testnet instance with user's wallet
+            testnet = await self.get_xian(
+                self.cfg.get('testnet_node'),
+                self.cfg.get('chain_id'),
+                from_wallet
+            )
+
+            # Validate target address
+            if not from_wallet.is_valid_key(to_address):
+                await message.edit_text(f"{con.ERROR} Not a valid address!")
+                return
+
+            # Check user's balance
+            from_address = from_wallet.public_key
+            balance = testnet.get_balance(from_address)
+
+            if balance < amount:
+                await message.edit_text(
+                    f"{con.ERROR} Insufficient balance!\n"
+                    f"You need {amount} tXIAN but only have {balance} tXIAN.\n"
+                    f"Use <code>/testnet claim</code> to claim more tokens first."
+                )
+                return
+
+            try:
+                # Send testnet XIAN from user's wallet
+                send = testnet.send(amount, to_address)
+                self.log.debug(f'Send TX: {send}')
+            except Exception as e:
+                msg = f"SEND Error: {e}"
+                self.log.error(msg)
+                await self.notify(msg)
+                await message.edit_text(f"{con.ERROR} {str(e)}")
+                return
+
+            await message.edit_text(
+                f"{con.INFO} Sent {amount} tXIAN from your bot wallet to\n"
+                f"<code>{to_address}</code>"
+            )
+
+        except Exception as e:
+            self.log.error(f"Unexpected error: {e}")
+            await self.notify(e)
+            await message.edit_text(f"{con.ERROR} An unexpected error occurred")
+
+    async def get_testnet_instance(self):
+        """Get testnet instance with faucet wallet"""
         testnet_node = self.cfg.get('testnet_node')
         chain_id = self.cfg.get('chain_id')
-
         from_privkey = self.cfg.get('privkey')
         from_wallet = Wallet(from_privkey)
 
@@ -34,51 +165,25 @@ class Testnet(TGBFPlugin):
         if chain_id is None:
             self.cfg.set('chain_id', testnet.chain_id)
 
-        balance = testnet.get_balance(to_address)
+        return testnet
+
+    async def validate_claim(self, testnet, address: str):
+        """Validate if address can claim tokens"""
+        # Check current balance
+        balance = testnet.get_balance(address)
         threshold = self.cfg.get('threshold')
 
-        # Check if address has more than threshold balance
         if balance > threshold:
-            msg = f'{con.ERROR} You have more than {threshold} tXIAN'
-            await update.message.reply_text(msg)
-            return
+            raise ValueError(f"Your bot wallet already has more than {threshold} tXIAN")
 
-        # Amount to send
-        amount = self.cfg.get('amount')
-
-        message = await update.message.reply_text(f"{con.WAIT} Sending {amount} tXIAN...")
-
-        # Current datetime
-        tz = timezone.utc
-        ft = "%Y-%m-%dT%H:%M:%S"
-        current_dt_str = datetime.now(tz=tz).strftime(ft)
-
-        # Last sent datetime
-        past_dt_str = self.kv_get(to_address)
-
+        # Check last claim time
+        past_dt_str = self.kv_get(address)
         if past_dt_str:
-            current_dt = datetime.strptime(current_dt_str, ft).replace(tzinfo=tz)
+            tz = timezone.utc
+            ft = "%Y-%m-%dT%H:%M:%S"
+            current_dt = datetime.now(tz=tz)
             past_dt = datetime.strptime(past_dt_str, ft).replace(tzinfo=tz)
-
             delta = current_dt - past_dt
 
             if delta.days < self.cfg.get('days_waiting'):
-                msg = f"{con.ERROR} You need to wait at least one day"
-                await message.edit_text(msg)
-                return
-
-        try:
-            # Send testnet XIAN
-            send = testnet.send(amount, to_address)
-            self.log.debug(f'Send TX: {send}')
-        except Exception as e:
-            msg = f"SEND Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
-            await message.edit_text(f"{con.ERROR} {e}")
-            return
-
-        # Save address with current datetime
-        self.kv_set(to_address, current_dt_str)
-
-        await message.edit_text(f"{con.INFO} Sent {amount} tXIAN")
+                raise ValueError("You need to wait at least one day between claims")
