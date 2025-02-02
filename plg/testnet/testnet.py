@@ -28,6 +28,11 @@ class Testnet(TGBFPlugin):
             )
             return
 
+        # Check for balance command
+        if context.args[0].lower() == "balance":
+            await self.handle_balance(update, user_wallet)
+            return
+
         # Check for claim command
         if context.args[0].lower() == "claim":
             await self.handle_claim(update, user_wallet)
@@ -37,8 +42,7 @@ class Testnet(TGBFPlugin):
         if context.args[0].lower() == "send":
             if len(context.args) != 3:
                 await update.message.reply_text(
-                    f"To send tokens, use:\n"
-                    f"<code>/testnet send [amount] [address]</code>"
+                    await self.get_info()
                 )
                 return
 
@@ -59,6 +63,30 @@ class Testnet(TGBFPlugin):
         await update.message.reply_text(
             await self.get_info()
         )
+
+    async def handle_balance(self, update: Update, user_wallet: Wallet):
+        """Handle showing testnet balance of user's bot wallet"""
+        message = await update.message.reply_text(f"{con.WAIT} Retrieving balance...")
+
+        try:
+            # Get testnet instance with user's wallet
+            testnet = await self.get_xian(
+                self.cfg.get('testnet_node'),
+                self.cfg.get('chain_id'),
+                user_wallet
+            )
+
+            # Get user's balance
+            balance = testnet.get_balance()
+
+            await message.edit_text(
+                f"{con.INFO} Balance: <code>{balance}</code> tXIAN\n"
+            )
+
+        except Exception as e:
+            self.log.error(f"Unexpected error: {e}")
+            await self.notify(e)
+            await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 
     async def handle_claim(self, update: Update, user_wallet: Wallet):
         """Handle claiming tokens to user's bot wallet"""
@@ -92,8 +120,7 @@ class Testnet(TGBFPlugin):
             self.kv_set(user_address, current_dt_str)
 
             await message.edit_text(
-                f"{con.INFO} Claimed {amount} tXIAN to your bot wallet\n"
-                f"<code>{user_address}</code>"
+                f"{con.INFO} Claimed {amount} tXIAN to your bot wallet"
             )
 
         except ValueError as e:
@@ -144,7 +171,7 @@ class Testnet(TGBFPlugin):
                 return
 
             await message.edit_text(
-                f"{con.INFO} Sent {amount} tXIAN from your bot wallet to\n"
+                f"{con.DONE} Sent {amount} tXIAN from your bot wallet to\n"
                 f"<code>{to_address}</code>"
             )
 
