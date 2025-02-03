@@ -1,82 +1,161 @@
-# Xian Telegram Bot
+# Xian Telegram Bot Framework
 
-TGBF2 is a framework to build Telegram bots based on the Python module [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot). That module is already easy to use but once you built more than one bot you will find yourself doing things over and over again and instead of copying things over all the time, it makes more sens to use a framework like this one that can handle certain things for you so that you can focus on implementing the main logic for bot commands.    
+A powerful and flexible framework for building Telegram bots using Python. Built on top of [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot), this framework provides a plugin-based architecture that makes it easy to develop, maintain, and extend Telegram bots.
 
-The following concepts help TGBF2 to achieve this
-- Plugin system
-  - Everything you can do with the `python-telegram-bot` module you can do here too with a plugin (Python file) that will be loaded on startup. These Plugins can also be enabled / disabled while the bot is running. Read more about plugins [here](plg/README.md).
-- FastAPI integration
-  - Each plugin can set up endpoints that can be enabled / disabled on the fly
-- JSON config files
-  - A plugin can have one or more config files that 
-- SQLite integration
-  - ...
-- Logging into file with file rotation
-- Decorators to handle common tasks like
-  - Typing notification on command execution
-  - Commands only for private / public /owner use
-  - Blacklists and Whitelists for command executions
-- Global data that all plugins can access
-- Existing plugins for
+## Features
+
+- **Plugin System**: Modular architecture where each feature is a plugin that can be enabled/disabled at runtime
+- **FastAPI Integration**: Each plugin can create its own HTTP endpoints
+- **SQLite Integration**: Built-in database support for persistent storage
+- **Configuration Management**: JSON-based configuration system for both global and per-plugin settings
+- **Advanced Logging**: File-based logging with rotation support
+- **Decorator System**: Handy decorators for common bot tasks like:
+  - Typing notifications
+  - Access control (private/public/owner commands)
+  - Command filtering (blacklists/whitelists)
+- **Built-in Plugins**:
   - Error handling
-  - Backups (whole bot or single plugins)
-  - Bot restart
-  - Bot shutdown
-  - Admin command to enable / disable plugins
-  - Tracking of posted user messages 
+  - Backup/restore functionality
+  - Bot control (restart/shutdown)
+  - Plugin management
+  - User message tracking
 
-- Explain core concepts
-  - Plugins - link to README in plg folder
-- Remove DB plugin and instead create how-to where the details are mentioned
-- If plugin 'debug' is not being used then no need to install 'psutil' module
-- Default parse mode is HTML
+## Installation
 
-## Enable webserver
-- In global config file `cfg/globla.cfg`  set `webserver - enabled` to `true`
-- In a plugin you can add following to enable a new route: `self.add_endpoint('/about', self.action)`
-  - Will require method `action()` too
+1. Clone the repository:
+```bash
+git clone https://github.com/xian-network/tg-bot.git
+cd tg-bot
+```
 
-## .env file
-- hidden file in main bot directory
-- contains parameters that plugins don't need to access (also sensitive data)
-- Parameters
-  - `TG_TOKEN` = Telegram bot token (get it from https://t.me/BotFather)
-  - `LOG_LEVEL` = DEBUG, INFO, WARNING, ERROR
-  - `LOG_INTO_FILE` = `true` or `false`. Saved logs into `log` folder
+2. Install Poetry (Python dependency management):
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
 
-## Plugin config file
-- In folder `cfg`
-- Accessible by plugins
-- Possible settings
-  - handle, dependency [], admins [], description, category, blacklist, blacklist_msg, whitelist, whitelist_msg
+3. Install dependencies:
+```bash
+poetry install
+```
 
-## Global config file
-- In folder `cfg`
-- Accessible by plugins
-- It's a JSON file (despite the .cfg extension)
-- Following parameters are possible
-  - `admin_tg_id` = Telegram user ID of bot admin (check ID by sending message https://t.me/getidsbot)
-  - `webserver - enabled` = Enable or disable webserver
-  - `webserver - port` = Webserver port
+4. Create `.env` file in the root directory:
+```env
+TG_TOKEN=your_telegram_bot_token
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, or ERROR
+LOG_INTO_FILE=true
+```
 
-## Download bot
-- `git clone https://github.com/Endogen/tgbf2.git`
+## Configuration
 
-## Update bot
-- Stop bot first with `pm2 stop [ID]`
-- `git reset --hard origin/main`
-- `git pull origin main`
+### Global Configuration
 
-## How to install `poetry`
-TODO
+The global configuration file (`cfg/global.json`) contains settings that affect the entire bot:
 
-## Run in background
-- `screen -S tgbf2`
-- start with `poetry run python main.py`
-- go back to your screen with `screen -r tgbf2`
+```json
+{
+    "admin_tg_id": 123456789,
+    "webserver_port": 5000,
+    "xian": {
+        "node": "http://127.0.0.1:26657",
+        "explorer": "https://explorer.xian.org",
+        "chain_id": "your-chain-id"
+    }
+}
+```
 
-## Run with PM2 (ecosystem file)
-- adjusting interpreter path
-- pm2 start `pm2.config.json`
+### Plugin Configuration
 
-TODO: Check README content with AI and adjust texts
+Each plugin can have its own configuration file in the `cfg` folder. Common settings include:
+- `handle`: Command trigger
+- `dependency`: List of required plugins
+- `admins`: List of admin user IDs
+- `description`: Plugin description
+- `category`: Plugin category
+- `blacklist`/`whitelist`: Access control lists
+- `blacklist_msg`/`whitelist_msg`: Custom messages for access denied
+
+## Running the Bot
+
+### Using PM2 (Recommended for Production)
+
+The repository includes both a startup script (`start.sh`) and PM2 configuration file (`pm2.config.json`). The startup script automatically detects the Poetry virtual environment, and the PM2 configuration is pre-configured with recommended settings for production use.
+
+First, make the startup script executable:
+```bash
+chmod +x start.sh
+```
+
+4. PM2 Commands:
+```bash
+# Start the bot
+pm2 start pm2.config.json
+
+# View status
+pm2 status
+
+# Monitor logs
+pm2 logs tg-bot
+
+# Monitor resources
+pm2 monit
+
+# Stop the bot
+pm2 stop tg-bot
+
+# Restart the bot
+pm2 restart tg-bot
+
+# Remove from PM2
+pm2 delete tg-bot
+
+# Set up auto-start on system boot
+pm2 startup
+pm2 save
+```
+
+### Using Screen (Alternative)
+
+```bash
+screen -S tgbf2
+poetry run python main.py
+# Press Ctrl+A, D to detach
+# Use 'screen -r tgbf2' to reattach
+```
+
+## Updating the Bot
+
+1. Stop the bot:
+```bash
+pm2 stop tg-bot
+```
+
+2. Pull latest changes:
+```bash
+git reset --hard origin/main
+git pull origin main
+```
+
+3. Update dependencies:
+```bash
+poetry install
+```
+
+4. Restart the bot:
+```bash
+pm2 restart tg-bot
+```
+
+## Plugin Development
+
+Plugins are Python modules that extend the bot's functionality. For detailed information about creating and working with plugins, see the [Plugin Development Guide](plg/README.md).
+
+## Web Server Integration
+
+To enable the FastAPI web server:
+
+1. In `cfg/global.json`, set:
+```json
+{
+    "webserver_port": 5000
+}
+```
