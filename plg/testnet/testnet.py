@@ -4,7 +4,7 @@ from plugin import TGBFPlugin
 from telegram import Update
 from xian_py.wallet import Wallet
 from telegram.ext import CallbackContext, CommandHandler
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 class Testnet(TGBFPlugin):
@@ -77,7 +77,7 @@ class Testnet(TGBFPlugin):
             )
 
             # Get user's balance
-            balance = testnet.get_balance()
+            balance = testnet.get_balance(user_wallet.public_key)
 
             await message.edit_text(
                 f"{con.INFO} Balance: <code>{balance}</code> tXIAN\n"
@@ -106,6 +106,14 @@ class Testnet(TGBFPlugin):
             try:
                 # Send testnet XIAN from faucet to user
                 send = testnet.send(amount, user_address)
+
+                if not send["success"]:
+                    msg = f"CLAIM Error: {send['message']}"
+                    self.log.error(msg)
+                    await self.notify(msg)
+                    await message.edit_text(f"{con.ERROR} Transaction failed: {send['message']}")
+                    return
+
                 self.log.debug(f'Claim TX: {send}')
             except Exception as e:
                 msg = f"CLAIM Error: {e}"
@@ -212,5 +220,13 @@ class Testnet(TGBFPlugin):
             past_dt = datetime.strptime(past_dt_str, ft).replace(tzinfo=tz)
             delta = current_dt - past_dt
 
-            if delta.days < self.cfg.get('days_waiting'):
-                raise ValueError("You need to wait at least one day between claims")
+            days_waiting = self.cfg.get('days_waiting')
+            if delta.days < days_waiting:
+                next_claim = past_dt + timedelta(days=days_waiting)
+                time_left = next_claim - current_dt
+                hours = int(time_left.total_seconds() // 3600)
+                minutes = int((time_left.total_seconds() % 3600) // 60)
+                raise ValueError(
+                    f"You need to wait {hours} hours and {minutes} minutes before claiming again\n"
+                    f"Next claim possible at: {next_claim.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+                )
