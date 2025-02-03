@@ -1,10 +1,12 @@
 {
     "apps": [{
         "name": "tg-bot",
-        "script": "main.py",
+        "script": "./start.sh",
         "instances": "1",
         "wait_ready": true,
         "autorestart": true,
-        "interpreter" : "/home/endogen/.cache/pypoetry/virtualenvs/tgbf2-WUuJEEsf-py3.11/bin/python"
+        "max_restarts": 5,
+        "min_uptime": "5s",
+        "watch": false
     }]
 }
