@@ -53,13 +53,13 @@ Create a JSON configuration file in the plugin's `cfg` directory:
 
 ```json
 {
-    "handle": "yourcommand",       # Command trigger (optional)
-    "category": "Your Category",   # For help command grouping
-    "description": "What your plugin does",
-    "dependency": ["other_plugin"],  # Required plugins
-    "admins": [123456789],          # Admin user IDs
-    "blacklist": [123456789],       # Blocked user IDs
-    "whitelist": [123456789]        # Allowed user IDs
+    "handle": "yourcommand",                 # Command trigger (optional)
+    "category": "Your Category",             # For help command grouping
+    "description": "What your plugin does",  # Plugin description
+    "dependency": ["other_plugin"],          # Required plugins
+    "admins": [123456789],                   # Admin user IDs
+    "blacklist": [123456789],                # Blocked user IDs
+    "whitelist": [123456789]                 # Allowed user IDs
 }
 ```
 
