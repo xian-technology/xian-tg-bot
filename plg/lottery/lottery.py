@@ -252,7 +252,7 @@ class Lottery(TGBFPlugin):
                     else:
                         await update.callback_query.message.reply_text(
                             f'{con.ERROR} Could not add {username} to the lottery: '
-                            f'<code>{result}</code>. {link}',
+                            f'<code>{result}</code>.',
                             disable_web_page_preview=True
                         )
 
@@ -265,7 +265,7 @@ class Lottery(TGBFPlugin):
                 else:
                     await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not add {username} to the lottery: '
-                        f'<code>{send["message"]}</code>. {link}',
+                        f'<code>{send["message"]}</code>.',
                         disable_web_page_preview=True
                     )
                     await context.bot.answer_callback_query(
@@ -319,7 +319,7 @@ class Lottery(TGBFPlugin):
                     else:
                         await update.callback_query.message.reply_text(
                             f'{con.ERROR} Could not end the lottery: '
-                            f'<code>{result}</code>. {link}',
+                            f'<code>{result}</code>.',
                             disable_web_page_preview=True
                         )
 
@@ -332,7 +332,7 @@ class Lottery(TGBFPlugin):
                 else:
                     await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not end the lottery: '
-                        f'<code>{send["message"]}</code>. {link}',
+                        f'<code>{send["message"]}</code>.',
                         disable_web_page_preview=True
                     )
                     await context.bot.answer_callback_query(
