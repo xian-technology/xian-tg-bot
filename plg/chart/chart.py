@@ -25,7 +25,11 @@ class Chart(TGBFPlugin):
         if not update.message:
             return
 
-        if len(context.args) not in [1, 2]:
+        # Set default values when no arguments provided
+        if not context.args:
+            context.args = ["XIANUSDT", "72h"]
+
+        if len(context.args) > 2:
             await update.message.reply_text(
                 await self.get_info()
             )
@@ -36,8 +40,7 @@ class Chart(TGBFPlugin):
             client = DexTradeAPI(DexTradeConfig(
                 login_token=self.cfg.get('api-token'),
                 secret=self.cfg.get('api-secret'),
-                )
-            )
+            ))
         except ValueError as e:
             await update.message.reply_text(f"{con.ERROR} API configuration error: {e}")
             return
@@ -108,7 +111,7 @@ class Chart(TGBFPlugin):
             # Update layout
             fig.update_layout(
                 title=dict(
-                    text=f"{pair} Candlestick Chart",
+                    text=f"{pair[:-4]}-{pair[-4:]} {context.args[1] if len(context.args) > 1 else '100h'}",
                     x=0.5,
                     font=dict(
                         size=24
@@ -127,6 +130,12 @@ class Chart(TGBFPlugin):
                     rangeslider=dict(visible=False)
                 ),
                 height=600,
+                margin=dict(
+                    l=80,
+                    r=50,
+                    t=100,
+                    b=50
+                ),
                 showlegend=False
             )
 
@@ -153,15 +162,3 @@ class Chart(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} Error creating chart: {e}")
             self.log.error(f"Chart error: {e}")
             await self.notify(e)
-
-    async def get_info(self):
-        """Return help message for the plugin"""
-        return (
-            "<b>Create candlestick chart for a trading pair</b>\n\n"
-            "◾️ Show 1-hour candles for last 100 hours:\n"
-            f"<code>/{self.handle} BTCUSDT</code>\n\n"
-            "◾️ Show 1-hour candles for specific number of hours:\n"
-            f"<code>/{self.handle} BTCUSDT 24h</code>\n\n"
-            "◾️ Show daily candles for specific number of days:\n"
-            f"<code>/{self.handle} BTCUSDT 30d</code>"
-        )
