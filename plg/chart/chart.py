@@ -61,7 +61,7 @@ class Chart(TGBFPlugin):
                     period = "60"  # 1 hour candles
                 except ValueError:
                     await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use <number>h for hours"
+                        f"{con.ERROR} Invalid timeframe format. Use [number]h for hours"
                     )
                     return
             elif timeframe.endswith('d'):
@@ -70,7 +70,7 @@ class Chart(TGBFPlugin):
                     period = "D"  # Daily candles
                 except ValueError:
                     await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use <number>d for days"
+                        f"{con.ERROR} Invalid timeframe format. Use [number]d for days"
                     )
                     return
             else:
@@ -79,14 +79,12 @@ class Chart(TGBFPlugin):
                 )
                 return
 
-        message = await update.message.reply_text(f"{con.WAIT} Fetching candlestick data...")
-
         try:
             # Get candlestick data
             candles = client.get_candlesticks(pair=pair, period=period, limit=limit)
 
             if not candles:
-                await message.edit_text(f"{con.ERROR} No data available for {pair}")
+                await update.message.reply_text(f"{con.ERROR} No data available for {pair}")
                 return
 
             # Process candlestick data
@@ -149,7 +147,6 @@ class Chart(TGBFPlugin):
             )
 
             # Send chart as photo
-            await message.delete()
             await update.message.reply_photo(
                 photo=io.BufferedReader(io.BytesIO(pio.to_image(fig, format='png'))),
                 caption=(
@@ -159,6 +156,6 @@ class Chart(TGBFPlugin):
             )
 
         except Exception as e:
-            await message.edit_text(f"{con.ERROR} Error creating chart: {e}")
+            await update.message.reply_text(f"{con.ERROR} Error creating chart: {e}")
             self.log.error(f"Chart error: {e}")
             await self.notify(e)
