@@ -21,8 +21,9 @@ plg/
 
 1. Create a new directory in the `plg` folder with your plugin name
 2. Create a Python file with the same name as the directory
-3. Create a class that inherits from `TGBFPlugin`
-4. Implement the required `init()` method
+3. Create a class with the same name as the directory
+4. The class needs to inherit from `TGBFPlugin`
+5. Implement the required `init()` method
 
 Basic example:
 
