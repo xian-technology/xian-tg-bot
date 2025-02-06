@@ -95,7 +95,7 @@ class Chart(TGBFPlugin):
             df['high'] = df['high'] / 1e8
             df['low'] = df['low'] / 1e8
             df['close'] = df['close'] / 1e8
-            df['volume'] = df['volume'] / 1e6
+            df['volume'] = df['volume'] / 1e8
 
             # Create candlestick chart
             fig = go.Figure(data=[go.Candlestick(
@@ -138,7 +138,7 @@ class Chart(TGBFPlugin):
             )
 
             # Add horizontal line at current price
-            current_price = df['close'].iloc[-1]
+            current_price = df['close'].values[0]
             fig.add_hline(
                 y=current_price,
                 line_dash="dot",
@@ -148,11 +148,12 @@ class Chart(TGBFPlugin):
 
             # Send chart as photo
             await update.message.reply_photo(
-                photo=io.BufferedReader(io.BytesIO(pio.to_image(fig, format='png'))),
-                caption=(
-                    f"{con.INFO} Last price: {current_price:.8f}\n"
-                    f"{con.INFO} 24h Volume: {df['volume'].sum():.2f}"
-                )
+                photo=io.BufferedReader(io.BytesIO(pio.to_image(fig, format='png')))
+            )
+
+            caption = (
+                f"<code>Last price: {current_price:,.4g} USDT</code>\n"
+                f"<code>24h Volume: {df['volume'].sum():,.0f}</code>"
             )
 
         except Exception as e:
