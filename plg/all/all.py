@@ -1,4 +1,5 @@
 import utils as utl
+import asyncio
 
 from plugin import TGBFPlugin
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -42,4 +43,10 @@ class All(TGBFPlugin):
         sleep_time = self.cfg.get("sleep")
         msg_text = update.message.text_html
 
-        # TODO: Iterate over all users and send message
+        sql = await self.get_resource('select_users.sql')
+        users = await self.exec_sql_global(sql, update.message.from_user.id)
+
+        for user_id in users:
+            await context.bot.send_message(user_id, msg_text)
+            self.log.debug(f"Sent message to user {user_id}")
+            await asyncio.sleep(sleep_time)
