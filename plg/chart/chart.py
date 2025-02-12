@@ -19,6 +19,7 @@ class Chart(TGBFPlugin):
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
+    @TGBFPlugin.whitelist()
     async def chart_callback(self, update: Update, context: CallbackContext):
         """Handle the candlestick chart command"""
         # Don't deal with edited messages
