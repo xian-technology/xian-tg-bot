@@ -13,6 +13,8 @@ class All(TGBFPlugin):
         await self.add_handler(CommandHandler(self.handle, self.all_callback, block=False))
         await self.add_handler(CallbackQueryHandler(self.send_callback, block=False))
 
+    @TGBFPlugin.owner(hidden=True)
+    @TGBFPlugin.private(hidden=True)
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def all_callback(self, update: Update, context: CallbackContext):
