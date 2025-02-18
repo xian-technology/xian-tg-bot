@@ -28,11 +28,11 @@ class All(TGBFPlugin):
             return
 
         def confirm_button():
-            menu = utl.build_menu([InlineKeyboardButton(f"Send to all users")])
+            menu = utl.build_menu([InlineKeyboardButton("Send to all users", callback_data=self.name)])
             return InlineKeyboardMarkup(menu)
 
         await update.message.reply_text(
-            update.message.text_html,
+            update.message.text_html[len(self.name) + 2:],
             reply_markup=confirm_button()
         )
 
@@ -41,12 +41,12 @@ class All(TGBFPlugin):
             return
 
         sleep_time = self.cfg.get("sleep")
-        msg_text = update.message.text_html
+        msg_text = update.callback_query.message.text_html
 
         sql = await self.get_resource('select_users.sql')
-        users = await self.exec_sql_global(sql, update.message.from_user.id)
+        users = await self.exec_sql_global(sql, update.effective_user.id)
 
-        for user_id in users:
-            await context.bot.send_message(user_id, msg_text)
-            self.log.debug(f"Sent message to user {user_id}")
+        for user_id in users['data']:
+            await context.bot.send_message(user_id[0], msg_text)
+            self.log.debug(f"Sent message to user {user_id[0]}")
             await asyncio.sleep(sleep_time)
