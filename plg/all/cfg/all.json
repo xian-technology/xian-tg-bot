@@ -1,4 +1,5 @@
 {
     "description": "Send a messages to all users",
-    "sleep": 1
+    "sleep": 1,
+    "admins": [138801491]
 }
