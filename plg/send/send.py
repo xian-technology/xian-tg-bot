@@ -1,8 +1,9 @@
 import constants as con
 
 from plugin import TGBFPlugin
-from telegram import Update
+from xian_py.transaction import simulate_tx
 from telegram.ext import CallbackContext, CommandHandler
+from telegram import Update
 
 
 class Send(TGBFPlugin):
@@ -95,13 +96,24 @@ class Send(TGBFPlugin):
                 await message.edit_text(msg)
                 return
 
-        # Recipient is an address
-        else:
-            # Check if address is valid
-            if not from_wallet.is_valid_key(to):
-                msg = f"{con.ERROR} Not a valid address!"
-                await update.message.reply_text(msg)
+        # Check if recipient is an address
+        elif not from_wallet.is_valid_key(to):
+            payload = {
+                "contract": self.cfg.get('xns_contract'),
+                "function": self.cfg.get('xns_function'),
+                "kwargs": {"name": to},
+                "sender": from_wallet.public_key
+            }
+
+            # Check if recipient an XNS name
+            sim = simulate_tx(self.cfg_global.get('xian', 'node'), payload)
+
+            if sim['result'] == 'None':
+                msg = f"{con.ERROR} Not a valid address, contract or XNS name!"
+                await message.edit_text(msg)
                 return
+            else:
+                to = sim['result'].replace("'", '')
 
         await message.edit_text(f"{con.WAIT} Sending {ticker} ...")
 

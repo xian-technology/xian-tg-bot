@@ -1,4 +1,6 @@
 {
     "category": "Xian",
-    "description": "Send XIAN to an address"
+    "description": "Send XIAN to an address",
+    "xns_contract": "con_name_service_final",
+    "xns_function": "get_main_name_to_address"
 }
