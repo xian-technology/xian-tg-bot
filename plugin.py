@@ -673,8 +673,9 @@ class TGBFPlugin:
             return _send_typing
         return decorator
 
+    # TODO: Use and adjust the logic that is currently being used in 'whitelist()'
     @classmethod
-    def blacklist(cls, hidden: bool = False):
+    def blacklist(cls, hidden: bool = False, dm: bool = False):
         """ Decorator to check whether a command can be executed in the given
          chat or not. If the current chat ID is part of the 'blacklist' list
          in the plugins config file then the command will not be executed. """
@@ -690,18 +691,19 @@ class TGBFPlugin:
                             return await func(self, update, context, **kwargs)
                         else:
                             return func(self, update, context, **kwargs)
+
+                    if not hidden:
+                        name = context.bot.username if context.bot.username else context.bot.name
+                        msg = self.cfg.get("blacklist_msg").replace("{{name}}", name)
+                        await update.message.reply_text(msg, disable_web_page_preview=True)
                 except:
                     pass
-
-                name = context.bot.username if context.bot.username else context.bot.name
-                msg = self.cfg.get("blacklist_msg").replace("{{name}}", name)
-                await update.message.reply_text(msg, disable_web_page_preview=True)
 
             return _blacklist
         return decorator
 
     @classmethod
-    def whitelist(cls, hidden: bool = False):
+    def whitelist(cls, hidden: bool = False, dm: bool = True):
         """ Decorator to check whether a command can be executed in the given
          chat or not. If the current chat ID is part of the 'whitelist' list
          in the plugins config file then the command will be executed. """
@@ -709,20 +711,33 @@ class TGBFPlugin:
         def decorator(func):
             @wraps(func)
             async def _whitelist(self, update: Update, context: CallbackContext, **kwargs):
-                whitelist_chats = self.cfg.get("whitelist")
+                group_id = update.effective_chat.id
+                thread_id = update.effective_message.message_thread_id
+
+                whitelist = self.cfg.get("whitelist")
+                whitelist = whitelist if whitelist else []
 
                 try:
-                    if whitelist_chats and (update.effective_chat.id in whitelist_chats):
+                    is_whitelisted = any(
+                        entry["group"] == group_id and
+                        (not "thread" in entry or entry["thread"] == thread_id)
+                        for entry in whitelist
+                    )
+
+                    if not is_whitelisted and dm:
+                        if (await context.bot.get_chat(group_id)).type == Chat.PRIVATE:
+                            is_whitelisted = True
+
+                    if is_whitelisted:
                         if asyncio.iscoroutinefunction(func):
                             return await func(self, update, context, **kwargs)
-                        else:
-                            return func(self, update, context, **kwargs)
+                        return func(self, update, context, **kwargs)
+                    elif not hidden:
+                        name = context.bot.username or context.bot.name
+                        msg = self.cfg.get("whitelist_msg").replace("{{name}}", name)
+                        await update.message.reply_text(msg, disable_web_page_preview=True)
                 except:
                     pass
-
-                name = context.bot.username if context.bot.username else context.bot.name
-                msg = self.cfg.get("whitelist_msg").replace("{{name}}", name)
-                await update.message.reply_text(msg, disable_web_page_preview=True)
 
             return _whitelist
         return decorator

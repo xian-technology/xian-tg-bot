@@ -3,5 +3,6 @@
     "description": "Display candlestick charts",
     "api-token": "123",
     "api-secret":"123",
-    "whitelist": "-1002119335225_4615"
+    "whitelist": [{"group": -1002119335225, "thread": 4615}],
+    "whitelist_msg": "This command can only be used in the topic 'Bot Spam'"
 }
