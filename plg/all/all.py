@@ -6,7 +6,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
 
 
-# TODO: How to best allow multiple users to do it?
 class All(TGBFPlugin):
 
     async def init(self):
