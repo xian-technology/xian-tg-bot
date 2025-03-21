@@ -9,10 +9,10 @@ Each plugin should have its own directory in the `plg` folder with the following
 ```
 plg/
 └── your_plugin/
-    ├── your_plugin.py     # Main plugin file
-    ├── cfg/               # Configuration files
+    ├── your_plugin.py        # Main plugin file
+    ├── cfg/                  # Configuration files
     │   └── your_plugin.json
-    └── res/              # Resource files
+    └── res/                  # Resource files
         ├── your_plugin.html  # Usage info
         └── other_resources
 ```
