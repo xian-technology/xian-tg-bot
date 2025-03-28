@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 
 import utils as utl
 import constants as con
@@ -113,6 +114,9 @@ class Lottery(TGBFPlugin):
             'total_amount': amount
         }
 
+        # Add wait to avoid getting same nonce back from the node
+        await asyncio.sleep(1)
+
         try:
             # Execute contract to start lottery
             send = xian.send_tx(lottery_contract, 'lottery_start', kwargs)
@@ -184,10 +188,10 @@ class Lottery(TGBFPlugin):
                 f"{con.DONE} Participate!",
                 callback_data=f'{self.name}_{lottery_id}_add'
             ),
-             InlineKeyboardButton(
-                 f"{con.FINISH} End (only creator)",
-                 callback_data=f'{self.name}_{lottery_id}_end'
-             )], 2
+                InlineKeyboardButton(
+                    f"{con.FINISH} End (only creator)",
+                    callback_data=f'{self.name}_{lottery_id}_end'
+                )], 2
         )
         return InlineKeyboardMarkup(menu)
 
