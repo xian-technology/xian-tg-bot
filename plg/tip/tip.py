@@ -131,17 +131,6 @@ class Tip(TGBFPlugin):
                     disable_web_page_preview=True
                 )
 
-                try:
-                    # Notify user about tip
-                    await context.bot.send_message(
-                        to_user_id,
-                        f"You received <code>{amount}</code> {ticker} from {from_user}\n{link}",
-                        disable_web_page_preview=True
-                    )
-                    self.log.info(f"User ID {to_user_id} notified about tip of {amount} {ticker}")
-                except Exception as ex:
-                    self.log.warning(f"User ID {to_user_id} could not be notified about tip: {ex} - {update}")
-
         if not send['success']:
             await message.edit_text(f"{con.STOP} {send['message']}")
         else:
