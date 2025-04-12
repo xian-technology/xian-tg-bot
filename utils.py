@@ -86,6 +86,56 @@ def format(value,
     return v
 
 
+def format_float(value):
+    # Check if the number has no decimal part
+    if value == int(value):
+        return str(int(value))
+
+    # Convert to string and split into integer and decimal parts
+    str_value = str(value)
+    parts = str_value.split('.')
+
+    # If there's somehow no decimal part after splitting
+    if len(parts) == 1:
+        return parts[0]
+
+    integer_part, decimal_part = parts
+
+    # Find the position of the first non-zero digit
+    first_non_zero_pos = 0
+    while first_non_zero_pos < len(decimal_part) and decimal_part[first_non_zero_pos] == '0':
+        first_non_zero_pos += 1
+
+    # If all decimal digits are zeros or we reached the end
+    if first_non_zero_pos >= len(decimal_part):
+        return integer_part
+
+    # Find the position of the second non-zero digit
+    second_non_zero_pos = first_non_zero_pos + 1
+    while second_non_zero_pos < len(decimal_part) and decimal_part[second_non_zero_pos] == '0':
+        second_non_zero_pos += 1
+
+    # Determine how many decimal places to keep
+    if second_non_zero_pos >= len(decimal_part):
+        # If there's only one non-zero digit, keep up to that position
+        decimal_places_to_keep = first_non_zero_pos + 1
+    else:
+        # Otherwise keep up to the second non-zero digit
+        decimal_places_to_keep = second_non_zero_pos + 1
+
+    # Format the number with the required decimal places
+    formatted_decimal = decimal_part[:decimal_places_to_keep]
+
+    # Remove trailing zeros
+    trimmed_decimal = formatted_decimal.rstrip('0')
+
+    # If all decimal digits were trimmed, return just the integer part
+    if trimmed_decimal == '':
+        return integer_part
+
+    return f"{integer_part}.{trimmed_decimal}"
+
+
 def build_menu(buttons, n_cols: int = 1, header_buttons=None, footer_buttons=None):
     """ Build button-menu for Telegram """
     menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
@@ -128,6 +178,11 @@ def split_msg(msg: str, max_len: int = None, split_char: str = "\n", only_one: b
 def encode_url(url: str):
     import urllib.parse as ul
     return ul.quote_plus(url)
+
+
+def id():
+    import time
+    return int(time.time() * 1000)
 
 
 def random_id(length: int = 8):
