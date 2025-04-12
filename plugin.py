@@ -306,9 +306,14 @@ class TGBFPlugin:
         kv_db = self._get_kv(plugin, db_name)
         return kv_db.getall()
 
-    def kv_del(self, key, plugin="", db_name=""):
+    def kv_del(self, key, plugin="", db_name="", is_prefix: bool = False):
         kv_db = self._get_kv(plugin, db_name)
-        return kv_db.rem(key)
+        if is_prefix:
+            for entry in [k for k in kv_db.getall() if k.startswith(key)]:
+                kv_db.rem(entry)
+            kv_db.dump()
+        else:
+            return kv_db.rem(key)
 
     async def exec_sql_global(self, sql, *args, db_name=""):
         """ Execute raw SQL statement on the global
