@@ -142,7 +142,7 @@ class Sell(TGBFPlugin):
         message = update.effective_message
 
         try:
-            xian.approve(contract, token=sell_contract, amount=100000000)
+            xian.approve(contract, token=sell_contract)
             self.log.debug(f'Approve TX: {xian.approve}')
         except Exception as e:
             msg = f"APPROVE Error: {e}"
