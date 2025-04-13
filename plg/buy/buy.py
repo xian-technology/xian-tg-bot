@@ -48,6 +48,12 @@ class Buy(TGBFPlugin):
         if amount.is_integer():
             amount = int(amount)
 
+        if "-" not in pair:
+            await message.edit_text(
+                f"{con.ERROR} Pair not valid. "
+                f"Please use the format <code>[ticker#1]-[ticker#2]</code>")
+            return
+
         # Split pair into tickers
         buy_symbol, sell_symbol = pair.split('-')
         buy_symbol = buy_symbol.upper()
