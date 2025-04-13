@@ -199,5 +199,5 @@ class Buy(TGBFPlugin):
 
         await context.bot.answer_callback_query(
             update.callback_query.id,
-            f"{con.ERROR} Bought {amount} {buy_symbol}"
+            f"{con.DONE} Bought {amount} {buy_symbol}"
         )

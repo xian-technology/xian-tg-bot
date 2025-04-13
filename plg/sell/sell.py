@@ -199,5 +199,5 @@ class Sell(TGBFPlugin):
 
         await context.bot.answer_callback_query(
             update.callback_query.id,
-            f"{con.ERROR} Sold {amount} {sell_symbol}"
+            f"{con.DONE} Sold {amount} {sell_symbol}"
         )
