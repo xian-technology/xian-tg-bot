@@ -166,7 +166,7 @@ class Rain(TGBFPlugin):
             counter += 1
 
             if counter > user_limit:
-                self.log.info(f"User limit of {user_limit} hit")
+                self.log.warning(f"User limit of {user_limit} hit")
                 break
 
             to_user_id = user[0]
@@ -245,20 +245,6 @@ class Rain(TGBFPlugin):
                     f"{msg}\n\n{link}",
                     disable_web_page_preview=True
                 )
-
-                for user in user_data:
-                    to_user_id = user[0]
-
-                    try:
-                        # Notify user about tip
-                        await context.bot.send_message(
-                            to_user_id,
-                            f"You received <code>{amount_single}</code> {ticker} "
-                            f"from {html.escape(from_username)}\n{link}",
-                            disable_web_page_preview=True)
-                        self.log.info(f"User {to_user_id} notified about rain of {amount_single} {ticker}")
-                    except Exception as ex:
-                        self.log.warning(f"User {to_user_id} could not be notified about rain: {ex} - {update}")
 
         if not send['success']:
             await message.edit_text(f"{con.STOP} {send['message']}")
