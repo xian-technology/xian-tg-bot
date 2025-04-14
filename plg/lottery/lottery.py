@@ -256,7 +256,7 @@ class Lottery(TGBFPlugin):
                 async def tx_result(success: str, result: str):
                     if success:
                         await update.callback_query.message.reply_text(
-                            f'{con.GREEN_HEART} User {username} participates in the lottery. {link}',
+                            f'{con.HEART_GREEN} User {username} participates in the lottery. {link}',
                             disable_web_page_preview=True
                         )
                         old_msg = self.kv_get(str(lottery_id))
@@ -326,7 +326,7 @@ class Lottery(TGBFPlugin):
                             winner = '<code>' + winner_address[:6] + '...' + '</code>'
 
                         await update.callback_query.message.reply_text(
-                            f'{con.GREEN_HEART} Lottery ended and {winner} won! {link}',
+                            f'{con.HEART} Lottery ended and {winner} won! {link}',
                             disable_web_page_preview=True
                         )
                         await update.callback_query.message.edit_reply_markup(
