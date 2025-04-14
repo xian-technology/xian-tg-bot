@@ -228,8 +228,7 @@ class Rain(TGBFPlugin):
                 try:
                     success, result = await self.plugins['event'].track_tx(
                         tx_hash,
-                        wait=True,
-                        timeout=60
+                        wait=True
                     )
                     if not success:
                         await message.edit_text(f"{con.STOP} Approval failed: {result}")
@@ -258,8 +257,7 @@ class Rain(TGBFPlugin):
             try:
                 success, result = await self.plugins['event'].track_tx(
                     tx_hash,
-                    wait=True,
-                    timeout=30
+                    wait=True
                 )
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
