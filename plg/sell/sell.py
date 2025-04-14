@@ -142,16 +142,48 @@ class Sell(TGBFPlugin):
         message = update.effective_message
 
         try:
-            xian.approve(contract, token=sell_contract)
-            self.log.debug(f'Approve TX: {xian.approve}')
+            approved_amount = xian.get_approved_amount(contract, token=sell_contract)
+            self.log.debug(f'Approved amount: {approved_amount}')
         except Exception as e:
-            msg = f"APPROVE Error: {e}"
+            msg = f"GET APPROVED AMOUNT Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        await asyncio.sleep(1)
+        if approved_amount < amount:
+            try:
+                approve = xian.approve(contract, token=sell_contract)
+                self.log.debug(f'Approve TX: {approve}')
+
+                if not approve['success']:
+                    await message.edit_text(f"{con.ERROR} Can not approve contract!")
+                    return
+            except Exception as e:
+                msg = f"APPROVE Error: {e}"
+                self.log.error(msg)
+                await self.notify(msg)
+                await message.edit_text(f"{con.ERROR} {e}")
+                return
+
+            tx_hash = approve['tx_hash']
+
+            if approve['success']:
+                try:
+                    success, result = await self.plugins['event'].track_tx(
+                        tx_hash,
+                        wait=True,
+                        timeout=60
+                    )
+                    if not success:
+                        await message.edit_text(f"{con.STOP} Approval failed: {result}")
+                        return
+                except asyncio.TimeoutError:
+                    await message.edit_text(f"{con.ERROR} Approval transaction timeout")
+                    return
+            else:
+                await message.edit_text(f"{con.STOP} {approve['message']}")
+                return
 
         try:
             sell = xian.send_tx(
@@ -173,32 +205,32 @@ class Sell(TGBFPlugin):
 
         tx_hash = sell['tx_hash']
 
-        async def tx_result(success: str, result: str):
-            if not success:
-                await message.edit_text(f"{con.STOP} {result}")
-            else:
-                explorer_url = self.cfg_global.get('xian', 'explorer')
-                link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
+        if sell['success']:
+            async def tx_result(success: str, result: str):
+                if success:
+                    explorer_url = self.cfg_global.get('xian', 'explorer')
+                    link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-                result = result.strip("'()").strip()
-                values = result.split(",")
+                    result = result.strip("'()").strip()
+                    values = result.split(",")
 
-                sold = float(values[0].strip())
-                bought = float(values[1].strip())
-                price = utl.format_float(bought / sold)
-                sold = utl.format_float(sold)
-                bought = utl.format_float(bought)
+                    sold = float(values[0].strip())
+                    bought = float(values[1].strip())
+                    price = utl.format_float(bought / sold)
+                    sold = utl.format_float(sold)
+                    bought = utl.format_float(bought)
 
-                await message.edit_text(
-                    f"{con.MONEY} Sold <code>{sold}</code> {sell_symbol} for "
-                    f"<code>{bought}</code> {buy_symbol} at a price of <code>{price}</code>\n{link}",
-                    disable_web_page_preview=True
-                )
+                    await message.edit_text(
+                        f"{con.MONEY} Sold <code>{sold}</code> {sell_symbol} for "
+                        f"<code>{bought}</code> {buy_symbol} at a price of <code>{price}</code>\n{link}",
+                        disable_web_page_preview=True
+                    )
+                else:
+                    await message.edit_text(f"{con.STOP} {result}")
 
-        if not sell['success']:
-            await message.edit_text(f"{con.STOP} {sell['message']}")
-        else:
             await self.plugins['event'].track_tx(tx_hash, tx_result)
+        else:
+            await message.edit_text(f"{con.STOP} {sell['message']}")
 
         # Remove all keys with ID as prefix
         self.kv_del(id, is_prefix=True)
