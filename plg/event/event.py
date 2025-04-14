@@ -160,7 +160,7 @@ class Event(TGBFPlugin):
                        tx_hash: str,
                        function_to_call: Optional[Callable] = None,
                        wait: bool = False,
-                       timeout: int = 60) -> Optional[Tuple[bool, str]]:
+                       timeout: int = 30) -> Optional[Tuple[bool, str]]:
         """
         Register a callback function for a transaction and optionally wait for confirmation.
 
