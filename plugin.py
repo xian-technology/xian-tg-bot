@@ -2,6 +2,7 @@ import os
 import sqlite3
 import inspect
 import asyncio
+import aiohttp
 import pickledb
 
 import constants as c
@@ -203,7 +204,7 @@ class TGBFPlugin:
 
         if not filepath.is_file():
             await self.notify(f'File not found: {filepath}')
-            return
+            return None
 
         return open(filepath, "rb")
 
@@ -314,6 +315,67 @@ class TGBFPlugin:
             kv_db.dump()
         else:
             return kv_db.rem(key)
+
+    async def fetch_graphql(
+            self,
+            query: str,
+            variables: dict = None,
+            endpoint: str = None,
+            headers: dict = None,
+            timeout: float = 30.0
+    ) -> dict:
+        """
+        Execute a GraphQL query and return the results.
+
+        Args:
+            query: The GraphQL query string
+            variables: Optional variables for the query
+            endpoint: GraphQL endpoint URL (falls back to config if not provided)
+            headers: Optional additional headers
+            timeout: Request timeout in seconds
+
+        Returns:
+            Dict containing the GraphQL response
+
+        Raises:
+            Exception: When the query fails
+        """
+        variables = variables or {}
+        endpoint = endpoint or self.cfg_global.get('xian', 'graph_ql')
+
+        # Prepare default headers
+        default_headers = {'Content-Type': 'application/json'}
+        if headers:
+            default_headers.update(headers)
+
+        payload = {
+            'query': query,
+            'variables': variables
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                        endpoint,
+                        json=payload,
+                        headers=default_headers,
+                        timeout=aiohttp.ClientTimeout(total=timeout)
+                ) as response:
+                    result = await response.json()
+
+                    # Check for HTTP error status
+                    if response.status != 200:
+                        raise Exception(f"GraphQL query failed with status code {response.status}")
+
+                    # Check for GraphQL errors
+                    if 'errors' in result:
+                        raise Exception(f"GraphQL query returned errors")
+
+                    return result
+
+        except Exception as e:
+            self.log.error(f"GraphQL error: {e}")
+            raise
 
     async def exec_sql_global(self, sql, *args, db_name=""):
         """ Execute raw SQL statement on the global
