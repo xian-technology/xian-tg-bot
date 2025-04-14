@@ -76,6 +76,19 @@ class Sell(TGBFPlugin):
                 sell_list.append(token[1])
                 sell_decimals = token[3]
 
+        # Check if tokens are known
+        if len(sell_list) == 0:
+            await message.edit_text(
+                f"{con.ERROR} No token contract found for <code>{sell_symbol.upper()}</code>. "
+                f"Please adjust your token list with /tokens"
+            )
+            return
+        if len(buy_list) == 0:
+            await message.edit_text(
+                f"{con.ERROR} No token contract found for <code>{sell_symbol.upper()}</code>. "
+                f"Please adjust your token list with /tokens"
+            )
+            return
         # Check if multiple matches found
         if len(sell_list) != 1:
             await message.edit_text(
