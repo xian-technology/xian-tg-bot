@@ -228,7 +228,6 @@ class Rain(TGBFPlugin):
                 try:
                     success, result = await self.plugins['event'].track_tx(
                         tx_hash,
-                        function_to_call=None,
                         wait=True,
                         timeout=60
                     )
@@ -257,8 +256,11 @@ class Rain(TGBFPlugin):
 
         if send['success']:
             try:
-                success, result = await self.plugins['event'].track_tx(tx_hash, wait=True, timeout=30)
-
+                success, result = await self.plugins['event'].track_tx(
+                    tx_hash,
+                    wait=True,
+                    timeout=30
+                )
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
                     link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
