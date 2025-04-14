@@ -247,7 +247,6 @@ class Lottery(TGBFPlugin):
                     'lottery_register',
                     {'lottery_id': lottery_id}
                 )
-
                 self.log.debug(f'Lottery Register TX: {send}')
 
                 tx_hash = send['tx_hash']
@@ -309,7 +308,6 @@ class Lottery(TGBFPlugin):
                     'lottery_end',
                     {'lottery_id': lottery_id}
                 )
-
                 self.log.debug(f'Lottery End TX: {send}')
 
                 tx_hash = send['tx_hash']

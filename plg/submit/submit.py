@@ -61,6 +61,7 @@ class Submit(TGBFPlugin):
 
         try:
             deploy = xian.submit_contract(name, code)
+            self.log.debug(f'Submit TX: {deploy}')
         except Exception as e:
             msg = f"DEPLOY_CONTRACT Error: {e}"
             self.log.error(msg)

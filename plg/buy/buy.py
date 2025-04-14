@@ -168,10 +168,6 @@ class Buy(TGBFPlugin):
             try:
                 approve = xian.approve(contract, token=sell_contract)
                 self.log.debug(f'Approve TX: {approve}')
-
-                if not approve['success']:
-                    await message.edit_text(f"{con.ERROR} Can not approve contract!")
-                    return
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
                 self.log.error(msg)
@@ -188,13 +184,13 @@ class Buy(TGBFPlugin):
                         wait=True
                     )
                     if not success:
-                        await message.edit_text(f"{con.STOP} Approval failed: {result}")
+                        await message.edit_text(f"{con.ERROR} Approval failed: {result}")
                         return
                 except asyncio.TimeoutError:
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await message.edit_text(f"{con.STOP} {approve['message']}")
+                await message.edit_text(f"{con.ERROR} {approve['message']}")
                 return
 
         try:
@@ -238,11 +234,11 @@ class Buy(TGBFPlugin):
                         disable_web_page_preview=True
                     )
                 else:
-                    await message.edit_text(f"{con.STOP} {result}")
+                    await message.edit_text(f"{con.ERROR} {result}")
 
             await self.plugins['event'].track_tx(tx_hash, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {buy['message']}")
+            await message.edit_text(f"{con.ERROR} {buy['message']}")
 
         # Remove all keys with ID as prefix
         self.kv_del(id, is_prefix=True)
