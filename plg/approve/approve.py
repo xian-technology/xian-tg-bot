@@ -51,13 +51,20 @@ class Approve(TGBFPlugin):
             return
 
         tx_hash = approve['tx_hash']
-        explorer_url = self.cfg_global.get('xian', 'explorer')
-        link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
         if approve['success']:
-            await message.edit_text(
-                f"{con.DONE} Contract approved\n{link}",
-                disable_web_page_preview=True
-            )
+            async def tx_result(success: str, result: str):
+                if success:
+                    explorer_url = self.cfg_global.get('xian', 'explorer')
+                    link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
+
+                    await message.edit_text(
+                        f"{con.DONE} Contract approved\n{link}",
+                        disable_web_page_preview=True
+                    )
+                else:
+                    await message.edit_text(f"{con.STOP} {result}")
+
+            await self.plugins['event'].track_tx(tx_hash, tx_result)
         else:
             await message.edit_text(f"{con.STOP} {approve['message']}")
