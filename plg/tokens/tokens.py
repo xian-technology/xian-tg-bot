@@ -5,6 +5,8 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 
+# TODO: Add '/tokens add-all' command
+# TODO: Add '/tokens remove-all' command
 class Tokens(TGBFPlugin):
 
     async def init(self):
@@ -56,6 +58,43 @@ class Tokens(TGBFPlugin):
                         f'You can add tokens with <code>/tokens contract_name</code>'
                     )
                 return
+            elif context.args[0].lower() == 'add-all':
+                all_tokens_query = await self.get_resource("get_all_tokens.gql")
+                all_tokens_data = await self.fetch_graphql(all_tokens_query)
+                all_tokens = all_tokens_data['data']['allContracts']['nodes']
+
+                sql_insert = await self.get_resource("insert_token.sql")
+                decimals = self.cfg.get('default_decimals')
+
+                tokens = await self.get_tokens(user_id)
+                existing = [token[1] for token in tokens]
+                xian = await self.get_xian()
+
+                await update.message.reply_text(f"{con.WAIT} Adding all tokens...")
+
+                for entry in all_tokens:
+                    if entry['name'] in existing:
+                        continue
+
+                    ticker = xian.get_state(
+                        entry['name'],
+                        'metadata',
+                        'token_symbol'
+                    )
+                    await self.exec_sql(
+                        sql_insert,
+                        user_id,
+                        entry['name'],
+                        ticker,
+                        decimals
+                    )
+                await update.message.reply_text(f"{con.STARS} All tokens added!")
+                return
+            elif context.args[0].lower() == 'remove-all':
+                remove_all_query = await self.get_resource("delete_all_tokens.sql")
+                await self.exec_sql(remove_all_query, user_id)
+                await update.message.reply_text(f"{con.STARS} All tokens removed!")
+                return
             else:
                 await update.message.reply_text(await self.get_info())
                 return
@@ -94,9 +133,9 @@ class Tokens(TGBFPlugin):
                     return
 
                 # Insert token into DB
-                sql = await self.get_resource("insert_token.sql")
+                sql_insert = await self.get_resource("insert_token.sql")
                 decimals = self.cfg.get('default_decimals')
-                await self.exec_sql(sql, user_id, lvl2, ticker.upper(), decimals)
+                await self.exec_sql(sql_insert, user_id, lvl2, ticker.upper(), decimals)
                 await update.message.reply_text(f"{con.STARS} Token contract added!")
                 return
 
@@ -113,8 +152,8 @@ class Tokens(TGBFPlugin):
                     return
 
                 # Delete token from DB
-                sql = await self.get_resource("delete_token.sql")
-                await self.exec_sql(sql,user_id, lvl2)
+                sql_insert = await self.get_resource("delete_token.sql")
+                await self.exec_sql(sql_insert,user_id, lvl2)
                 await update.message.reply_text(f"{con.STARS} Token contract removed!")
                 return
 
@@ -134,8 +173,8 @@ class Tokens(TGBFPlugin):
                         return
 
                     # Update decimal places of a contract
-                    sql = await self.get_resource("update_decimals.sql")
-                    await self.exec_sql(sql, int(decimals), user_id, contract)
+                    sql_insert = await self.get_resource("update_decimals.sql")
+                    await self.exec_sql(sql_insert, int(decimals), user_id, contract)
                     await update.message.reply_text(f"{con.STARS} Decimals updated!")
                     return
 
@@ -154,8 +193,8 @@ class Tokens(TGBFPlugin):
                         return
 
                     # Update ticker of a contract
-                    sql = await self.get_resource("update_ticker.sql")
-                    await self.exec_sql(sql, ticker, user_id, contract)
+                    sql_insert = await self.get_resource("update_ticker.sql")
+                    await self.exec_sql(sql_insert, ticker, user_id, contract)
                     await update.message.reply_text(f"{con.STARS} Ticker updated!")
                     return
 

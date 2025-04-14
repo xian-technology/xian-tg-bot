@@ -1,0 +1,11 @@
+{
+  allContracts(
+    condition: {
+      xsc0001: true
+    }
+  ) {
+    nodes {
+      name
+    }
+  }
+}
