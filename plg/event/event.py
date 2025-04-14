@@ -4,14 +4,15 @@ import json
 import gc
 
 from plugin import TGBFPlugin
-from functools import partial
 from xian_py.encoding import decode_str
-from typing import Callable
+from typing import Callable, Dict, Tuple, Optional
 
 
 class Event(TGBFPlugin):
     # Key = Tx hash, Value = Callable - function to call
     execute = dict()
+    # Store futures for transaction waiting
+    futures: Dict[str, asyncio.Future] = dict()
     event = str()
 
     async def init(self):
@@ -83,10 +84,12 @@ class Event(TGBFPlugin):
                     status = decoded_data['status']
                     result = decoded_data['result']
 
+                    success = True if status == 0 else False
+                    result_data = ' ' if result == 'None' else result
+
+                    # If there's a callback function, execute it
                     if self.execute[tx_hash]:
                         callback = self.execute[tx_hash]
-                        success = True if status == 0 else False
-                        result_data = ' ' if result == 'None' else result
 
                         if asyncio.iscoroutinefunction(callback):
                             # If it's an async function, await it
@@ -94,6 +97,13 @@ class Event(TGBFPlugin):
                         else:
                             # If it's a regular function, just call it
                             callback(success=success, result=result_data)
+
+                    # If there's a future for this transaction, set its result
+                    if tx_hash in self.futures:
+                        future = self.futures[tx_hash]
+                        if not future.done():
+                            future.set_result((success, result_data))
+                        del self.futures[tx_hash]
 
                     del self.execute[tx_hash]
         except Exception as e:
@@ -122,5 +132,42 @@ class Event(TGBFPlugin):
         await ws.send(json.dumps(subscribe_message))
         self.log.info("Sent subscription message")
 
-    async def track_tx(self, tx_hash: str, function_to_call: Callable):
-        self.execute[tx_hash] = function_to_call
+    async def track_tx(self,
+                       tx_hash: str,
+                       function_to_call: Optional[Callable] = None,
+                       wait: bool = False,
+                       timeout: int = 60) -> Optional[Tuple[bool, str]]:
+        """
+        Register a callback function for a transaction and optionally wait for confirmation.
+
+        Args:
+            tx_hash: The transaction hash to track
+            function_to_call: Optional callback function to call when transaction is confirmed
+            wait: Whether to wait for transaction confirmation
+            timeout: Maximum time to wait in seconds (only used if wait=True)
+
+        Returns:
+            If wait=True: Tuple of (success, result)
+            If wait=False: None
+
+        Raises:
+            asyncio.TimeoutError: If wait=True and the transaction is not confirmed within the timeout
+        """
+        # Register the callback if provided
+        if function_to_call:
+            self.execute[tx_hash] = function_to_call
+
+        # If wait is requested, create a future and wait for it
+        if wait:
+            future = asyncio.Future()
+            self.futures[tx_hash] = future
+
+            try:
+                return await asyncio.wait_for(future, timeout)
+            except asyncio.TimeoutError:
+                # Remove the future if timeout occurs
+                if tx_hash in self.futures:
+                    del self.futures[tx_hash]
+                raise
+
+        return None
