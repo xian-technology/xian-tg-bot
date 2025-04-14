@@ -1,4 +1,5 @@
 import html
+import asyncio
 
 import constants as con
 
@@ -197,7 +198,7 @@ class Rain(TGBFPlugin):
 
         try:
             approved_amount = xian.get_approved_amount(multisend_contract, token=contract)
-            self.log.debug(f'approved amount: {approved_amount}')
+            self.log.debug(f'Approved amount: {approved_amount}')
         except Exception as e:
             msg = f"GET APPROVED AMOUNT Error: {e}"
             self.log.error(msg)
@@ -209,7 +210,7 @@ class Rain(TGBFPlugin):
             try:
                 # Approve sending tokens to contract
                 approve = xian.approve(multisend_contract, token=contract)
-                self.log.debug(f'approve: {approve}')
+                self.log.debug(f'Approve: {approve}')
 
                 if not approve['success']:
                     await message.edit_text(f"{con.ERROR} Can not approve contract!")
@@ -219,6 +220,26 @@ class Rain(TGBFPlugin):
                 self.log.error(msg)
                 await self.notify(msg)
                 await message.edit_text(f"{con.ERROR} {e}")
+                return
+
+            tx_hash = approve['tx_hash']
+
+            if approve['success']:
+                try:
+                    success, result = await self.plugins['event'].track_tx(
+                        tx_hash,
+                        function_to_call=None,
+                        wait=True,
+                        timeout=60
+                    )
+                    if not success:
+                        await message.edit_text(f"{con.STOP} Approval failed: {result}")
+                        return
+                except asyncio.TimeoutError:
+                    await message.edit_text(f"{con.ERROR} Approval transaction timeout")
+                    return
+            else:
+                await message.edit_text(f"{con.STOP} {approve['message']}")
                 return
 
         try:
@@ -234,19 +255,17 @@ class Rain(TGBFPlugin):
 
         tx_hash = send['tx_hash']
 
-        async def tx_result(success: str, result: str):
-            if not success:
-                await message.edit_text(f"{con.STOP} {result}")
-            else:
-                explorer_url = self.cfg_global.get('xian', 'explorer')
-                link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
+        if send['success']:
+            try:
+                success, result = await self.plugins['event'].track_tx(tx_hash, wait=True, timeout=30)
 
-                await message.edit_text(
-                    f"{msg}\n\n{link}",
-                    disable_web_page_preview=True
-                )
-
-        if not send['success']:
-            await message.edit_text(f"{con.STOP} {send['message']}")
+                if success:
+                    explorer_url = self.cfg_global.get('xian', 'explorer')
+                    link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
+                    await message.edit_text(f"{msg}\n\n{link}", disable_web_page_preview=True)
+                else:
+                    await message.edit_text(f"{con.STOP} {result}")
+            except asyncio.TimeoutError:
+                await message.edit_text(f"{con.ERROR} Rain transaction timeout")
         else:
-            await self.plugins['event'].track_tx(tx_hash, tx_result)
+            await message.edit_text(f"{con.STOP} {send['message']}")
