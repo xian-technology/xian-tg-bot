@@ -88,16 +88,8 @@ class Lottery(TGBFPlugin):
 
         if approved_amount < amount:
             try:
-                # Approve sending tokens to contract
                 approve = xian.approve(lottery_contract, token=token_contract)
-                self.log.debug(f'approve: {approve}')
-
-                if not approve['success']:
-                    await context.bot.send_message(
-                        update.message.chat_id,
-                        f"{con.ERROR} Can not approve contract!"
-                    )
-                    return
+                self.log.debug(f'Approve TX: {approve}')
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
                 self.log.error(msg)
@@ -108,14 +100,35 @@ class Lottery(TGBFPlugin):
                 )
                 return
 
+            tx_hash = approve['tx_hash']
+
+            if approve['success']:
+                try:
+                    success, result = await self.plugins['event'].track_tx(
+                        tx_hash,
+                        wait=True
+                    )
+                    if not success:
+                        await context.bot.send_message(
+                            update.message.chat_id,
+                            f"{con.ERROR} Approval failed: {result}")
+                        return
+                except asyncio.TimeoutError:
+                    await context.bot.send_message(
+                        update.message.chat_id,
+                        f"{con.ERROR} Approval transaction timeout")
+                    return
+            else:
+                await context.bot.send_message(
+                    update.message.chat_id,
+                    f"{con.ERROR} {approve['message']}")
+                return
+
         kwargs = {
             'lottery_id': update.message.id,
             'token_contract': token_contract,
             'total_amount': amount
         }
-
-        # Add wait to avoid getting same nonce back from the node
-        await asyncio.sleep(1)
 
         try:
             # Execute contract to start lottery
@@ -171,16 +184,18 @@ class Lottery(TGBFPlugin):
             else:
                 await context.bot.send_message(
                     update.message.chat_id,
-                    f"{con.STOP} {result}"
+                    f"{con.ERROR} {result}"
                 )
+                return
 
         if send['success']:
             await self.plugins['event'].track_tx(tx_hash, tx_result)
         else:
             await context.bot.send_message(
                 update.message.chat_id,
-                f"{con.STOP} {send['message']}"
+                f"{con.ERROR} {send['message']}"
             )
+            return
 
     def lottery_buttons(self, lottery_id: int):
         menu = utl.build_menu(
@@ -259,6 +274,7 @@ class Lottery(TGBFPlugin):
                             f'<code>{result}</code>.',
                             disable_web_page_preview=True
                         )
+                        return
 
                 if send['success']:
                     await self.plugins['event'].track_tx(tx_hash, tx_result)
@@ -277,7 +293,7 @@ class Lottery(TGBFPlugin):
                         f"{con.ERROR} Something went wrong..."
                     )
             except Exception as e:
-                msg = f"Lottery Register Error: {e}"
+                msg = f"LOTTERY REGISTER Error: {e}"
                 self.log.error(msg)
                 await self.notify(msg)
                 await context.bot.answer_callback_query(
@@ -326,6 +342,7 @@ class Lottery(TGBFPlugin):
                             f'<code>{result}</code>.',
                             disable_web_page_preview=True
                         )
+                        return
 
                 if send['success']:
                     await self.plugins['event'].track_tx(tx_hash, tx_result)
@@ -343,8 +360,9 @@ class Lottery(TGBFPlugin):
                         update.callback_query.id,
                         f"{con.ERROR} Something went wrong..."
                     )
+                    return
             except Exception as e:
-                msg = f"Lottery End Error: {e}"
+                msg = f"LOTTERY END Error: {e}"
                 self.log.error(msg)
                 await self.notify(msg)
                 await context.bot.answer_callback_query(
@@ -358,6 +376,7 @@ class Lottery(TGBFPlugin):
                 update.callback_query.id,
                 f"{con.ERROR} Something went wrong..."
             )
+            return
 
     # Function to update the "User Pool" value
     def update_user_pool(self, msg):
