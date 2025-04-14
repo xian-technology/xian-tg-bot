@@ -112,26 +112,21 @@ class Tip(TGBFPlugin):
 
         tx_hash = send['tx_hash']
 
-        async def tx_result(success: str, result: str):
-            if not success:
-                await message.edit_text(f"{con.STOP} {result}")
-            else:
-                explorer_url = self.cfg_global.get('xian', 'explorer')
-                link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
+        if send['success']:
+            async def tx_result(success: str, result: str):
+                if success:
+                    explorer_url = self.cfg_global.get('xian', 'explorer')
+                    link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-                to_user = reply.from_user.first_name
+                    to_user = reply.from_user.first_name
 
-                if update.effective_user.username:
-                    from_user = f"@{update.effective_user.username}"
+                    await message.edit_text(
+                        f"{con.MONEY} {html.escape(to_user)} received <code>{amount}</code> {ticker}\n{link}",
+                        disable_web_page_preview=True
+                    )
                 else:
-                    from_user = update.effective_user.first_name
+                    await message.edit_text(f"{con.STOP} {result}")
 
-                await message.edit_text(
-                    f"{con.MONEY} {html.escape(to_user)} received <code>{amount}</code> {ticker}\n{link}",
-                    disable_web_page_preview=True
-                )
-
-        if not send['success']:
-            await message.edit_text(f"{con.STOP} {send['message']}")
-        else:
             await self.plugins['event'].track_tx(tx_hash, tx_result)
+        else:
+            await message.edit_text(f"{con.STOP} {send['message']}")
