@@ -69,45 +69,69 @@ class Event(TGBFPlugin):
     async def on_message(self, ws, msg):
         self.log.info(f'Event {self.event}: {msg}')
 
-        msg = json.loads(msg)
-
-        if not msg['result']:
-            return
-
-        tx_hash_from_event = msg['result']['events']['tx.hash']
-
         try:
+            msg_json = json.loads(msg)
+
+            if not msg_json.get('result'):
+                return
+
+            # Get transaction hash from event - this could be a string or list
+            tx_hash_from_event = msg_json['result']['events'].get('tx.hash', [])
+
+            # Convert to list if it's not already
+            if not isinstance(tx_hash_from_event, list):
+                tx_hash_from_event = [tx_hash_from_event]
+
+            self.log.debug(f'Transaction hashes in event: {tx_hash_from_event}')
+            self.log.debug(f'Tracked transactions: {list(self.execute.keys())}')
+
+            # Normalize all hashes to uppercase for comparison
+            tx_hash_from_event_upper = [h.upper() for h in tx_hash_from_event]
+
             for tx_hash in list(self.execute.keys()):
-                if tx_hash in tx_hash_from_event:
-                    data = msg['result']['data']['value']['TxResult']['result']['data']
-                    decoded_data = json.loads(decode_str(data))
-                    status = decoded_data['status']
-                    result = decoded_data['result']
+                # Normalize to uppercase for comparison
+                tx_hash_upper = tx_hash.upper()
 
-                    success = True if status == 0 else False
-                    result_data = ' ' if result == 'None' else result
+                if tx_hash_upper in tx_hash_from_event_upper:
+                    self.log.debug(f'Found matching transaction: {tx_hash}')
 
-                    # If there's a callback function, execute it
-                    if self.execute[tx_hash]:
-                        callback = self.execute[tx_hash]
+                    try:
+                        data = msg_json['result']['data']['value']['TxResult']['result']['data']
+                        decoded_data = json.loads(decode_str(data))
+                        status = decoded_data.get('status')
+                        result = decoded_data.get('result', 'None')
 
-                        if asyncio.iscoroutinefunction(callback):
-                            # If it's an async function, await it
-                            await callback(success=success, result=result_data)
-                        else:
-                            # If it's a regular function, just call it
-                            callback(success=success, result=result_data)
+                        success = True if status == 0 else False
+                        result_data = ' ' if result == 'None' else result
 
-                    # If there's a future for this transaction, set its result
-                    if tx_hash in self.futures:
-                        future = self.futures[tx_hash]
-                        if not future.done():
-                            future.set_result((success, result_data))
-                        del self.futures[tx_hash]
+                        self.log.debug(f'Transaction result: success={success}, result={result_data}')
 
-                    del self.execute[tx_hash]
+                        # If there's a callback function, execute it
+                        if self.execute[tx_hash]:
+                            callback = self.execute[tx_hash]
+
+                            if asyncio.iscoroutinefunction(callback):
+                                # If it's an async function, await it
+                                self.log.debug(f'Executing async callback for {tx_hash}')
+                                await callback(success=success, result=result_data)
+                            else:
+                                # If it's a regular function, just call it
+                                self.log.debug(f'Executing sync callback for {tx_hash}')
+                                callback(success=success, result=result_data)
+
+                        # If there's a future for this transaction, set its result
+                        if tx_hash in self.futures:
+                            future = self.futures[tx_hash]
+                            if not future.done():
+                                self.log.debug(f'Setting future result for {tx_hash}')
+                                future.set_result((success, result_data))
+                            del self.futures[tx_hash]
+
+                        del self.execute[tx_hash]
+                    except Exception as e:
+                        self.log.error(f'Error processing transaction {tx_hash}: {e}')
         except Exception as e:
-            self.log.error(e)
+            self.log.error(f'Error in on_message: {e}')
             await self.notify(e)
 
     async def on_error(self, error):
@@ -156,6 +180,9 @@ class Event(TGBFPlugin):
         # Register the callback if provided
         if function_to_call:
             self.execute[tx_hash] = function_to_call
+        elif wait:
+            # If only waiting without a callback, create a dummy callback
+            self.execute[tx_hash] = lambda success, result: None
 
         # If wait is requested, create a future and wait for it
         if wait:
@@ -163,9 +190,18 @@ class Event(TGBFPlugin):
             self.futures[tx_hash] = future
 
             try:
-                return await asyncio.wait_for(future, timeout)
+                self.log.debug(f'Waiting for transaction {tx_hash} with timeout {timeout}s')
+                result = await asyncio.wait_for(future, timeout)
+                self.log.debug(f'Wait completed for {tx_hash} with result: {result}')
+                return result
             except asyncio.TimeoutError:
                 # Remove the future if timeout occurs
+                self.log.debug(f'Timeout waiting for transaction {tx_hash}')
+                if tx_hash in self.futures:
+                    del self.futures[tx_hash]
+                raise
+            except Exception as e:
+                self.log.error(f'Error waiting for transaction {tx_hash}: {e}')
                 if tx_hash in self.futures:
                     del self.futures[tx_hash]
                 raise
