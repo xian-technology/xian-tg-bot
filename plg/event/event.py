@@ -10,7 +10,6 @@ from typing import Callable
 
 
 class Event(TGBFPlugin):
-
     # Key = Tx hash, Value = Callable - function to call
     execute = dict()
     event = str()
@@ -84,11 +83,18 @@ class Event(TGBFPlugin):
                     status = decoded_data['status']
                     result = decoded_data['result']
 
-                    await partial(
-                        self.execute[tx_hash],
-                        success=True if status == 0 else False,
-                        result='' if result == 'None' else result
-                    )()
+                    if self.execute[tx_hash]:
+                        callback = self.execute[tx_hash]
+                        success = True if status == 0 else False
+                        result_data = ' ' if result == 'None' else result
+
+                        if asyncio.iscoroutinefunction(callback):
+                            # If it's an async function, await it
+                            await callback(success=success, result=result_data)
+                        else:
+                            # If it's a regular function, just call it
+                            callback(success=success, result=result_data)
+
                     del self.execute[tx_hash]
         except Exception as e:
             self.log.error(e)
