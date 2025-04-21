@@ -1,0 +1,16 @@
+query GetSwapEvents($pairId: String!) {
+    allEvents(
+        condition: {contract: "con_pairs", event: "Swap"}
+        filter: {dataIndexed: {contains: {pair: $pairId}}}
+        orderBy: CREATED_DESC
+        first: 500
+    ) {
+        edges {
+            node {
+                dataIndexed
+                data
+                created
+            }
+        }
+    }
+}

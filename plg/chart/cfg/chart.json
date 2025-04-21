@@ -1,6 +1,6 @@
 {
-    "category": "Charts",
-    "description": "Display candlestick charts",
+    "category": "Xian",
+    "description": "Display DEX candlestick charts",
     "api-token": "123",
     "api-secret":"123",
     "whitelist": [{"group": -1002119335225, "thread": 4615}],
