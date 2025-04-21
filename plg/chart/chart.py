@@ -242,7 +242,7 @@ class Chart(TGBFPlugin):
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
-                    y=1.02,
+                    y=1.05,
                     xanchor="center",
                     x=0.5,
                     bgcolor="rgba(0,0,0,0.3)",
