@@ -115,7 +115,7 @@ class Chart(TGBFPlugin):
             pair = await self.find_pair_by_symbols(base_symbol, quote_symbol)
 
             if not pair:
-                await update.message.reply_text(f"{con.ERROR} Trading pair {base_symbol}/{quote_symbol} not found")
+                await update.message.reply_text(f"{con.ERROR} Trading pair {base_symbol}-{quote_symbol} not found")
                 return
 
             # Determine if base token is token0 or token1
@@ -125,7 +125,7 @@ class Chart(TGBFPlugin):
             events = await self.fetch_swap_events(pair['id'])
 
             if not events:
-                await update.message.reply_text(f"{con.ERROR} No swap events found for {base_symbol}/{quote_symbol}")
+                await update.message.reply_text(f"{con.ERROR} No swap events found for {base_symbol}-{quote_symbol}")
                 return
 
             # Process into candles
@@ -133,7 +133,7 @@ class Chart(TGBFPlugin):
 
             if not candles:
                 await update.message.reply_text(
-                    f"{con.ERROR} Could not generate candlesticks for {base_symbol}/{quote_symbol}")
+                    f"{con.ERROR} Could not generate candlesticks for {base_symbol}-{quote_symbol}")
                 return
 
             # Create DataFrame for Plotly
@@ -162,7 +162,7 @@ class Chart(TGBFPlugin):
                 shared_xaxes=True,
                 vertical_spacing=0.03,
                 row_heights=[0.8, 0.2],
-                subplot_titles=(f"{base_symbol}/{quote_symbol} {context.args[1] if len(context.args) > 1 else '72h'}",
+                subplot_titles=(f"{base_symbol}-{quote_symbol} {context.args[1] if len(context.args) > 1 else '72h'}",
                                 "Volume")
             )
 
