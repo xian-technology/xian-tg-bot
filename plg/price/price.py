@@ -14,6 +14,7 @@ class Price(TGBFPlugin):
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
+    @TGBFPlugin.whitelist()
     async def price_callback(self, update: Update, context: CallbackContext):
         """Handle the price command"""
         # Don't deal with edited messages
