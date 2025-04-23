@@ -1,12 +1,12 @@
+import gc
 import json
 import asyncio
 import websockets
-import gc
 
+import constants as con
 from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-import constants as con
 from xian_py.encoding import decode_str
 
 
@@ -250,22 +250,26 @@ class Buybot(TGBFPlugin):
     async def send_dex_notification(self, contract, function, arguments, tx_hash):
         """Send DEX event notification to all watched chats with appealing buy-bot style"""
         try:
-            # Determine if it's a buy or sell and which tokens are involved
-            is_buy = True
+            # Determine tokens involved in the swap
             src_token = arguments.get("src", "")
+            pair_id = arguments.get("pair", 1)
 
-            if src_token.upper() == "CURRENCY":
-                # Buying another token with XIAN
-                token_symbol = "XUSDC" if arguments.get("pair") == 1 else "POOP"  # Default to XUSDC for pair 1
-                # Try to determine the actual token from the pair ID
-                token_symbol = await self.get_token_symbol_for_pair(arguments.get("pair", 1), is_source=False)
+            # For XIAN-XUSDC pair (pair_id 1), we want to show transactions where people BUY XIAN
+            if pair_id == 1:  # XIAN-XUSDC pair
+                # Skip if selling XIAN for XUSDC (src = currency)
+                if src_token.upper() == "CURRENCY":
+                    self.log.info("Skipping XUSDC buy transaction - buybot only shows XIAN buys")
+                    return
+                # Continue if buying XIAN with XUSDC (src = con_usdc)
+                token_symbol = "XIAN"
             else:
-                # Selling a token for XIAN
-                is_buy = False
-                token_symbol = src_token.replace("con_", "").upper()
-                # Try to determine actual token if it's a contract
-                if src_token.startswith("con_"):
-                    token_symbol = await self.get_token_symbol_for_contract(src_token)
+                # For other pairs, we want to show transactions buying non-XIAN tokens with XIAN
+                # Skip if NOT spending XIAN (src != currency)
+                if src_token.upper() != "CURRENCY":
+                    self.log.info(f"Skipping sell transaction for pair {pair_id} - buybot only shows buys")
+                    return
+                # Continue if buying token with XIAN
+                token_symbol = await self.get_token_symbol_for_pair(pair_id, is_source=False)
 
             # Extract amounts
             amount_in_obj = arguments.get("amountIn", {})
@@ -287,17 +291,23 @@ class Buybot(TGBFPlugin):
             buyer_address = arguments.get("to", "Unknown")
             short_address = buyer_address[:6] + "..." + buyer_address[-4:] if len(buyer_address) > 10 else buyer_address
 
-            # Format message based on buy/sell
-            if is_buy:
-                # Buying token with XIAN
-                title = f"{token_symbol} Buy!"
-                emoji_line = "🟢" * 30  # Green for buys
-                action_text = f"Spent {amount_in_float:.4f} XIAN\nGot {amount_out_float:.6f} {token_symbol}"
+            # Dynamic emoji count based on amount (use output amount for XIAN buys)
+            if token_symbol == "XIAN":
+                # For XIAN buys, base emoji count on the amount of XIAN received
+                emoji_count = max(3, min(50, int(amount_out_float)))
+                spent_token = "XUSDC"
+                got_token = "XIAN"
             else:
-                # Selling token for XIAN
-                title = f"{token_symbol} Sell!"
-                emoji_line = "🔴" * 30  # Red for sells
-                action_text = f"Spent {amount_in_float:.6f} {token_symbol}\nGot {amount_out_float:.4f} XIAN"
+                # For other token buys, base emoji count on XIAN spent
+                emoji_count = max(3, min(50, int(amount_in_float)))
+                spent_token = "XIAN"
+                got_token = token_symbol
+
+            emoji_line = "🟢" * emoji_count
+
+            # Format buy message
+            title = f"{token_symbol} Buy!"
+            action_text = f"Spent {amount_in_float:.6f} {spent_token}\nGot {amount_out_float:.6f} {got_token}"
 
             # Get links
             explorer_url = self.cfg_global.get('xian', 'explorer', "https://explorer.xian.org")
@@ -311,17 +321,6 @@ class Buybot(TGBFPlugin):
                 f"🔀 {action_text}\n"
                 f"👤 <a href='{address_link}'>Trader ({short_address})</a> / <a href='{tx_link}'>TX</a>\n"
             )
-
-            # Try to add extra information if available
-            try:
-                # Attempt to get price info
-                price_plugin = self.plugins.get('price')
-                if price_plugin:
-                    price_info = await price_plugin.get_token_price(token_symbol)
-                    if price_info and price_info.get('price'):
-                        message += f"💰 Price: {price_info['price']:.6f} XIAN\n"
-            except Exception as e:
-                self.log.debug(f"Could not add price info: {e}")
 
             # Send to all watched chats
             if self.watched_chats is None:
