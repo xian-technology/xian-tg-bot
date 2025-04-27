@@ -472,8 +472,8 @@ class Chart(TGBFPlugin):
             return []
 
         # Get time boundaries for candles
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(minutes=interval_minutes * limit)
+        current_time = datetime.utcnow()
+        start_time = current_time - timedelta(minutes=interval_minutes * limit)
 
         # Round to interval boundaries (as in web implementation)
         rounded_start = start_time.replace(
@@ -482,20 +482,27 @@ class Chart(TGBFPlugin):
             microsecond=0
         )
 
-        rounded_end = end_time.replace(
-            minute=(end_time.minute // interval_minutes) * interval_minutes,
+        # Use current time for the end boundary to include in-progress candle
+        current_interval_start = current_time.replace(
+            minute=(current_time.minute // interval_minutes) * interval_minutes,
             second=0,
             microsecond=0
         )
 
+        # Calculate the next interval after current for proper boundaries
+        next_interval = current_interval_start + timedelta(minutes=interval_minutes)
+
         # Generate all intervals
         intervals = []
         current = rounded_start
-        while current <= rounded_end:
+        while current <= current_interval_start:
             intervals.append(current)
             current += timedelta(minutes=interval_minutes)
 
-        # Process candles with same logic as web implementation
+        # Add one more interval for the future (needed for proper interval boundaries)
+        intervals.append(next_interval)
+
+        # Process candles
         candles = []
         previous_close = None
 
@@ -503,9 +510,12 @@ class Chart(TGBFPlugin):
             interval_start = intervals[i]
             interval_end = intervals[i + 1]
 
+            # For the current in-progress interval, use actual current time as boundary
+            actual_end = current_time if interval_start == current_interval_start else interval_end
+
             # Find trades in this interval
             interval_trades = [t for t in trades
-                               if interval_start <= t['timestamp'] < interval_end]
+                               if interval_start <= t['timestamp'] < actual_end]
 
             if interval_trades:
                 if previous_close is None:
