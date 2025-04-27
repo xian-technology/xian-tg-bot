@@ -8,6 +8,7 @@ from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 from xian_py.encoding import decode_str
+from datetime import datetime
 
 
 class Buybot(TGBFPlugin):
@@ -15,7 +16,6 @@ class Buybot(TGBFPlugin):
 
     def format_current_time_for_display(self):
         """Format current time as a list for display in deadline field"""
-        from datetime import datetime
         now = datetime.utcnow()
         return [now.year, now.month, now.day, now.hour, now.minute]
 
