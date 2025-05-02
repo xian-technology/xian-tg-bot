@@ -24,6 +24,11 @@ class Manage(TGBFPlugin):
             return
 
         try:
+            # Check if the topic is closed - indicating that an admin posted it
+            if msg.forum_topic_closed:
+                # No further action needed
+                return
+
             # Are we in the right topic?
             if msg.message_thread_id == self.cfg.get('thread_id'):
                 # Is user allowed to post?
