@@ -1,0 +1,15 @@
+{
+    "category": "Xian",
+    "description": "Monitor DEX transactions in real-time",
+    "watched_chats": [
+        -1001154540877
+    ],
+    "watched_contracts": [
+        "con_dex_v2"
+    ],
+    "watched_functions": [
+        "swapExactTokenForTokenSupportingFeeOnTransferTokens",
+        "swapExactTokenForToken",
+        "swapTokenForExactToken"
+    ]
+}
