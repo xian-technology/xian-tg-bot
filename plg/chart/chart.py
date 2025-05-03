@@ -153,7 +153,8 @@ class Chart(TGBFPlugin):
             bg_color = 'rgb(25, 25, 40)'  # Dark blue background
             grid_color = 'rgba(255, 255, 255, 0.1)'  # Subtle grid
             text_color = 'rgba(255, 255, 255, 0.9)'  # White text
-            volume_color = 'rgba(59, 152, 173, 0.5)'  # Blue for volume
+
+            tf = context.args[1] if len(context.args) > 1 else '72h'
 
             # Create a new figure with subplots (price and volume)
             fig = make_subplots(
@@ -162,8 +163,7 @@ class Chart(TGBFPlugin):
                 shared_xaxes=True,
                 vertical_spacing=0.03,
                 row_heights=[0.8, 0.2],
-                subplot_titles=(f"{base_symbol}-{quote_symbol} {context.args[1] if len(context.args) > 1 else '72h'}",
-                                "Volume")
+                subplot_titles=(f"{base_symbol}-{quote_symbol} {tf}", "Volume")
             )
 
             # Add candlestick trace
