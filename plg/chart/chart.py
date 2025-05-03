@@ -1,312 +1,241 @@
 import io
 import json
+import asyncio
+import pickledb
 
 import pandas as pd
 import constants as con
 import plotly.io as pio
 import plotly.graph_objects as go
 
+from pathlib import Path
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from plugin import TGBFPlugin
 
 
 class Chart(TGBFPlugin):
-    """Plugin for displaying candlestick charts using XIAN DEX GraphQL data"""
+    """Plugin for displaying candlestick charts using XIAN DEX GraphQL data with persistent caching"""
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.chart_callback, block=False))
+        # Register chart command
+        await self.add_handler(
+            CommandHandler(self.handle, self.chart_callback, block=False)
+        )
+
+        # Initialize persistent cache (auto_dump=False for batch writes)
+        cache_path = Path(self.get_dat_path()) / 'cache.db'
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self.cache_db = pickledb.load(str(cache_path), False)
+
+        # Schedule cache refresh every 5 minutes, run immediately
+        self.run_repeating(
+            self._refresh_cache_job,
+            interval=300,
+            first=5,
+            name=f"{self.name}_cache_refresh"
+        )
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     @TGBFPlugin.whitelist()
     async def chart_callback(self, update: Update, context: CallbackContext):
-        """Handle the candlestick chart command"""
-        # Don't deal with edited messages
+        """Handle candlestick chart command, using cache with live fallback"""
         if not update.message:
             return
 
-        # Set default values when no arguments provided
+        # Argument parsing ...
         if not context.args:
             context.args = ["XIAN-XUSDC", "72h"]
         elif len(context.args) == 1:
-            # One argument - could be a timeframe or a ticker/pair
             arg = context.args[0]
-
-            # Check if it's a timeframe (ends with h, d, or m and has numbers)
-            if (arg.lower().endswith(('h', 'd', 'm')) and
-                    any(c.isdigit() for c in arg)):
-                # It's a timeframe, use default pair
+            if (arg.lower().endswith(('h','d','m')) and any(c.isdigit() for c in arg)):
                 context.args = ["XIAN-XUSDC", arg]
             else:
-                # It's a ticker or pair
                 if '-' not in arg:
-                    # It's a ticker, construct ticker-XIAN pair
                     context.args = [f"{arg.upper()}-XIAN", "72h"]
                 else:
-                    # It's already a pair, add default timeframe
                     context.args = [arg, "72h"]
         elif len(context.args) == 2:
-            # If first argument is just a ticker (no dash), construct ticker-XIAN pair
             if '-' not in context.args[0]:
                 context.args[0] = f"{context.args[0].upper()}-XIAN"
         else:
-            await update.message.reply_text(
-                await self.get_info()
-            )
+            await update.message.reply_text(await self.get_info())
             return
 
-        # Parse trading pair symbol (e.g., "XIANUSDT")
+        # Parse symbols
         pair_str = context.args[0].upper()
-
-        # Split the pair string (e.g., "XIANUSDT" -> "XIAN", "USDT")
-        if "-" in pair_str:
-            base_symbol, quote_symbol = pair_str.split("-")
+        if '-' in pair_str:
+            base_symbol, quote_symbol = pair_str.split('-')
         else:
             base_symbol = pair_str
-            quote_symbol = "XUSDC"  # Default
+            quote_symbol = 'XUSDC'
 
-        # Default to 1h candles for last 100 hours if no timeframe specified
-        interval_minutes = 60  # 1 hour
-        limit = 100  # 100 intervals
-
-        # Parse timeframe if provided
+        # Timeframe parsing
+        interval_minutes, limit = 60, 100
         if len(context.args) == 2:
-            timeframe = context.args[1].lower()
-            if timeframe.endswith('h'):
-                try:
-                    hours = int(timeframe[:-1])
-                    limit = hours
-                    interval_minutes = 60  # 1 hour candles
-                except ValueError:
-                    await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use [number]h for hours"
-                    )
-                    return
-            elif timeframe.endswith('d'):
-                try:
-                    days = int(timeframe[:-1])
-                    limit = days
-                    interval_minutes = 1440  # Daily candles (24 hours)
-                except ValueError:
-                    await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use [number]d for days"
-                    )
-                    return
-            elif timeframe.endswith('m'):
-                try:
-                    minutes = int(timeframe[:-1])
-                    limit = minutes
-                    interval_minutes = 1  # Minute candles
-                except ValueError:
-                    await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use [number]m for minutes"
-                    )
-                    return
-            else:
+            tf = context.args[1].lower()
+            try:
+                if tf.endswith('h'):
+                    limit = int(tf[:-1]); interval_minutes = 60
+                elif tf.endswith('d'):
+                    limit = int(tf[:-1]); interval_minutes = 1440
+                elif tf.endswith('m'):
+                    limit = int(tf[:-1]); interval_minutes = 1
+                else:
+                    raise ValueError
+            except ValueError:
                 await update.message.reply_text(
-                    f"{con.ERROR} Invalid timeframe format. Use h for hours, d for days, or m for minutes"
+                    f"{con.ERROR} Invalid timeframe format. Use h, d or m"
                 )
                 return
 
         try:
-            # Find the pair by symbols
+            # Find pair
             pair = await self.find_pair_by_symbols(base_symbol, quote_symbol)
-
             if not pair:
-                await update.message.reply_text(f"{con.ERROR} Trading pair {base_symbol}-{quote_symbol} not found")
+                await update.message.reply_text(
+                    f"{con.ERROR} Trading pair {base_symbol}-{quote_symbol} not found"
+                )
                 return
 
-            # Determine if base token is token0 or token1
-            base_is_token0 = pair.get('token0_symbol', '').upper() == base_symbol.upper()
+            base_is_token0 = pair.get('token0_symbol','').upper() == base_symbol.upper()
 
-            # Get swap events
-            events = await self.fetch_swap_events(pair['id'])
-
+            # Get events
+            events = await self.get_cached_swap_events(pair['id'])
             if not events:
-                await update.message.reply_text(f"{con.ERROR} No swap events found for {base_symbol}-{quote_symbol}")
+                await update.message.reply_text(
+                    f"{con.ERROR} No swap events found for {base_symbol}-{quote_symbol}"
+                )
                 return
 
-            # Process into candles
+            # Process candles
             candles = self.process_swap_events(events, interval_minutes, limit, base_is_token0)
-
             if not candles:
                 await update.message.reply_text(
-                    f"{con.ERROR} Could not generate candlesticks for {base_symbol}-{quote_symbol}")
+                    f"{con.ERROR} Could not generate candlesticks for {base_symbol}-{quote_symbol}"
+                )
                 return
 
-            # Create DataFrame for Plotly
+            # Build DataFrame
             df = pd.DataFrame(candles)
-
-            # Current price for price line
-            current_price = df['close'].values[-1]
-
-            # Calculate min and max price for better y-axis scaling (add 5% padding)
-            y_min = min(df['low']) * 0.95
-            y_max = max(df['high']) * 1.05
+            current_price = df['close'].iloc[-1]
+            y_min = df['low'].min() * 0.95
+            y_max = df['high'].max() * 1.05
 
             # Define colors
-            up_color = 'rgb(0, 171, 107)'  # Green for bullish candles
-            down_color = 'rgb(255, 73, 73)'  # Red for bearish candles
-            bg_color = 'rgb(25, 25, 40)'  # Dark blue background
-            grid_color = 'rgba(255, 255, 255, 0.1)'  # Subtle grid
-            text_color = 'rgba(255, 255, 255, 0.9)'  # White text
-            volume_color = 'rgba(59, 152, 173, 0.5)'  # Blue for volume
+            up_color = 'rgb(0, 171, 107)'
+            down_color = 'rgb(255, 73, 73)'
+            bg_color = 'rgb(25, 25, 40)'
+            grid_color = 'rgba(255, 255, 255, 0.1)'
+            text_color = 'rgba(255, 255, 255, 0.9)'
 
-            # Create a new figure with subplots (price and volume)
-            from plotly.subplots import make_subplots
+            # Create figure
             fig = make_subplots(
-                rows=2,
-                cols=1,
-                shared_xaxes=True,
-                vertical_spacing=0.03,
-                row_heights=[0.8, 0.2],
-                subplot_titles=(f"{base_symbol}-{quote_symbol} {context.args[1] if len(context.args) > 1 else '72h'}",
-                                "Volume")
+                rows=2, cols=1, shared_xaxes=True,
+                vertical_spacing=0.03, row_heights=[0.8,0.2]
             )
 
-            # Add candlestick trace
+            # Candlestick
             fig.add_trace(
                 go.Candlestick(
-                    x=df['time'],
-                    open=df['open'],
-                    high=df['high'],
-                    low=df['low'],
-                    close=df['close'],
+                    x=df['time'], open=df['open'], high=df['high'],
+                    low=df['low'], close=df['close'],
                     increasing=dict(line=dict(color=up_color), fillcolor=up_color),
                     decreasing=dict(line=dict(color=down_color), fillcolor=down_color),
                     name='Price'
-                ),
-                row=1, col=1
+                ), row=1, col=1
             )
 
-            # Calculate and add volume bars
+            # Volume bars
             colors = [up_color if df['close'][i] >= df['open'][i] else down_color for i in range(len(df))]
             fig.add_trace(
                 go.Bar(
-                    x=df['time'],
-                    y=df['volume'],
-                    marker_color=colors,
-                    name='Volume',
-                    opacity=0.7
-                ),
-                row=2, col=1
+                    x=df['time'], y=df['volume'],
+                    marker_color=colors, name='Volume', opacity=0.7
+                ), row=2, col=1
             )
 
-            # Add moving averages if we have enough data
+            # Moving averages
             if len(df) >= 20:
-                df['MA20'] = df['close'].rolling(window=20).mean()
+                df['MA20'] = df['close'].rolling(20).mean()
                 fig.add_trace(
                     go.Scatter(
-                        x=df['time'],
-                        y=df['MA20'],
+                        x=df['time'], y=df['MA20'],
                         line=dict(color='rgba(255, 207, 0, 0.7)', width=2),
                         name='20-period MA'
-                    ),
-                    row=1, col=1
+                    ), row=1, col=1
                 )
-
             if len(df) >= 50:
-                df['MA50'] = df['close'].rolling(window=50).mean()
+                df['MA50'] = df['close'].rolling(50).mean()
                 fig.add_trace(
                     go.Scatter(
-                        x=df['time'],
-                        y=df['MA50'],
+                        x=df['time'], y=df['MA50'],
                         line=dict(color='rgba(144, 238, 144, 0.7)', width=2),
                         name='50-period MA'
-                    ),
-                    row=1, col=1
+                    ), row=1, col=1
                 )
 
-            # Add current price line
+            # Current price line
             fig.add_shape(
-                type="line",
-                x0=df['time'].min(),
-                x1=df['time'].max(),
-                y0=current_price,
-                y1=current_price,
-                line=dict(color='rgba(102, 204, 255, 0.8)', width=2, dash="dot"),
+                type='line', x0=df['time'].min(), x1=df['time'].max(),
+                y0=current_price, y1=current_price,
+                line=dict(color='rgba(102, 204, 255, 0.8)', width=2, dash='dot'),
                 row=1, col=1
             )
 
-            # Update layout with modern styling
+            # Layout & styling
             fig.update_layout(
+                title_text=f"{base_symbol}-{quote_symbol} {context.args[1]}",
+                title_x=0.5,
                 paper_bgcolor=bg_color,
                 plot_bgcolor=bg_color,
-                font=dict(
-                    family="Arial, sans-serif",
-                    size=13,
-                    color=text_color
-                ),
+                font=dict(family="Arial, sans-serif", size=13, color=text_color),
                 legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.05,
-                    xanchor="center",
-                    x=0.5,
-                    bgcolor="rgba(0,0,0,0.3)",
-                    bordercolor="rgba(255,255,255,0.2)",
+                    orientation='h', yanchor='bottom', y=1,
+                    xanchor='center', x=0.5,
+                    bgcolor='rgba(0,0,0,0.3)', bordercolor='rgba(255,255,255,0.2)',
                     font=dict(color=text_color)
                 ),
                 margin=dict(l=60, r=60, t=80, b=60),
-                height=700,  # Taller chart for better visibility
-                hovermode="x unified",
+                height=700, hovermode='x unified',
                 xaxis_rangeslider_visible=False
             )
 
-            # Style the main price chart
+            # Price axes styling
             fig.update_xaxes(
                 row=1, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color,
-                showspikes=True,
-                spikethickness=1,
-                spikedash="solid",
-                spikecolor="rgba(255,255,255,0.4)",
-                spikemode="across"
+                gridcolor=grid_color, zerolinecolor=grid_color,
+                showspikes=True, spikethickness=1, spikedash='solid',
+                spikecolor='rgba(255,255,255,0.4)', spikemode='across'
             )
-
             fig.update_yaxes(
                 row=1, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color,
-                title=f"Price ({quote_symbol})",
-                titlefont=dict(size=13),
-                showspikes=True,
-                spikethickness=1,
-                spikedash="solid",
-                spikecolor="rgba(255,255,255,0.4)",
-                spikemode="across",
-                range=[y_min, y_max]  # Set y-axis range with padding
+                range=[y_min, y_max], gridcolor=grid_color, zerolinecolor=grid_color,
+                title=f"Price ({quote_symbol})", titlefont=dict(size=13),
+                showspikes=True, spikethickness=1, spikedash='solid',
+                spikecolor='rgba(255,255,255,0.4)', spikemode='across'
             )
 
-            # Style the volume chart
-            fig.update_xaxes(
-                row=2, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color
-            )
-
+            # Volume axes styling
+            fig.update_xaxes(row=2, col=1, gridcolor=grid_color, zerolinecolor=grid_color)
             fig.update_yaxes(
                 row=2, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color,
-                title=f"Volume ({base_symbol})",
-                titlefont=dict(size=13)
+                gridcolor=grid_color, zerolinecolor=grid_color,
+                title=f"Volume ({base_symbol})", titlefont=dict(size=13)
             )
 
-            # Calculate 24h volume (if we have enough data)
+            # Caption
             hours_24_ago = datetime.utcnow() - timedelta(hours=24)
-            volume_24h = sum(candle['volume'] for candle in candles
-                             if candle['time'] >= hours_24_ago)
-
+            volume_24h = sum(c['volume'] for c in candles if c['time'] >= hours_24_ago)
             caption = (
                 f"<code>Last price: {current_price:,.8g} {quote_symbol}</code>\n"
                 f"<code>24h Volume: {volume_24h:,.2f} {base_symbol}</code>"
             )
 
-            # Send chart as photo with higher resolution
+            # Send image
             await update.message.reply_photo(
                 photo=io.BufferedReader(io.BytesIO(pio.to_image(fig, format='png', scale=2))),
                 caption=caption
@@ -316,6 +245,69 @@ class Chart(TGBFPlugin):
             await update.message.reply_text(f"{con.ERROR} Error creating chart: {e}")
             self.log.error(f"Chart error: {e}")
             await self.notify(e)
+
+    async def get_cached_pairs(self):
+        pairs = self.cache_db.get('pairs')
+        if not pairs:
+            pairs = await self.fetch_pairs()
+            if pairs:
+                self.cache_db.set('pairs', pairs)
+                self.cache_db.dump()
+        return pairs or []
+
+    async def get_cached_token_symbols(self):
+        symbols = self.cache_db.get('token_symbols') or {}
+        pairs = await self.get_cached_pairs()
+        contracts = {p['token0'] for p in pairs} | {p['token1'] for p in pairs}
+        missing = [c for c in contracts if c not in symbols]
+        if missing:
+            new = await self.fetch_token_symbols(missing)
+            symbols.update(new)
+            self.cache_db.set('token_symbols', symbols)
+            self.cache_db.dump()
+        return symbols
+
+    async def get_cached_swap_events(self, pair_id):
+        key = f"swaps:{pair_id}"
+        if not self.cache_db.exists(key):
+            events = await self.fetch_swap_events(pair_id)
+            self.cache_db.set(key, events)
+            self.cache_db.dump()
+            return events
+        return self.cache_db.get(key)
+
+    async def _refresh_cache_job(self, context):
+        try:
+            pairs = await self.fetch_pairs()
+            if pairs:
+                self.cache_db.set('pairs', pairs)
+            contracts = {p['token0'] for p in pairs} | {p['token1'] for p in pairs}
+            token_symbols = await self.fetch_token_symbols(list(contracts))
+            self.cache_db.set('token_symbols', token_symbols)
+            tasks = [self.fetch_swap_events(p['id']) for p in pairs]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for p, ev in zip(pairs, results):
+                if not isinstance(ev, Exception):
+                    self.cache_db.set(f"swaps:{p['id']}", ev)
+            self.cache_db.dump()
+        except Exception as e:
+            self.log.error(f"Cache refresh error: {e}")
+            await self.notify(e)
+
+    async def find_pair_by_symbols(self, base_symbol, quote_symbol='XUSDC'):
+        pairs = await self.get_cached_pairs()
+        if not pairs:
+            return None
+        token_symbols = await self.get_cached_token_symbols()
+        for pair in pairs:
+            t0 = token_symbols.get(pair['token0'], '').upper()
+            t1 = token_symbols.get(pair['token1'], '').upper()
+            if (t0 == base_symbol.upper() and t1 == quote_symbol.upper()) or \
+               (t1 == base_symbol.upper() and t0 == quote_symbol.upper()):
+                pair['token0_symbol'] = t0 or pair['token0']
+                pair['token1_symbol'] = t1 or pair['token1']
+                return pair
+        return None
 
     async def fetch_pairs(self):
         pairs_query = await self.get_resource("get_pairs.gql")
@@ -375,38 +367,6 @@ class Chart(TGBFPlugin):
                     token_symbols[token] = symbol
 
         return token_symbols
-
-    async def find_pair_by_symbols(self, base_symbol, quote_symbol='XUSDC'):
-        """Find a pair by base and quote symbols"""
-        # Get all pairs
-        pairs = await self.fetch_pairs()
-
-        if not pairs:
-            return None
-
-        # Get unique token contracts
-        token_contracts = set()
-        for pair in pairs:
-            token_contracts.add(pair['token0'])
-            token_contracts.add(pair['token1'])
-
-        # Get token symbols
-        token_symbols = await self.fetch_token_symbols(list(token_contracts))
-
-        # Find the pair with matching symbols
-        for pair in pairs:
-            token0_symbol = token_symbols.get(pair['token0'], '').upper()
-            token1_symbol = token_symbols.get(pair['token1'], '').upper()
-
-            # Check for match in either direction
-            if (token0_symbol == base_symbol.upper() and token1_symbol == quote_symbol.upper()) or \
-                    (token1_symbol == base_symbol.upper() and token0_symbol == quote_symbol.upper()):
-                # Store the symbols for later use
-                pair['token0_symbol'] = token_symbols.get(pair['token0'], pair['token0'])
-                pair['token1_symbol'] = token_symbols.get(pair['token1'], pair['token1'])
-                return pair
-
-        return None
 
     async def fetch_swap_events(self, pair_id):
         """Fetch swap events for a specific pair"""
