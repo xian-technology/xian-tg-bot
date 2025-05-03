@@ -1,14 +1,11 @@
 import io
 import json
-import asyncio
-import pickledb
 
 import pandas as pd
 import constants as con
 import plotly.io as pio
 import plotly.graph_objects as go
 
-from pathlib import Path
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 from plotly.subplots import make_subplots
@@ -17,32 +14,16 @@ from plugin import TGBFPlugin
 
 
 class Chart(TGBFPlugin):
-    """Plugin for displaying candlestick charts using XIAN DEX GraphQL data with persistent caching"""
+    """Plugin for displaying candlestick charts using XIAN DEX GraphQL data"""
 
     async def init(self):
-        # Register chart command
-        await self.add_handler(
-            CommandHandler(self.handle, self.chart_callback, block=False)
-        )
-
-        # Initialize persistent cache (auto_dump=False for batch writes)
-        cache_path = Path(self.get_dat_path()) / 'cache.db'
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        self.cache_db = pickledb.load(str(cache_path), False)
-
-        # Schedule cache refresh every 5 minutes, run immediately
-        self.run_repeating(
-            self._refresh_cache_job,
-            interval=300,
-            first=5,
-            name=f"{self.name}_cache_refresh"
-        )
+        await self.add_handler(CommandHandler(self.handle, self.chart_callback, block=False))
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     @TGBFPlugin.whitelist()
     async def chart_callback(self, update: Update, context: CallbackContext):
-        """Handle candlestick chart command, using cache with live fallback"""
+        """Handle the candlestick chart command"""
         # Don't deal with edited messages
         if not update.message:
             return
@@ -62,23 +43,15 @@ class Chart(TGBFPlugin):
             else:
                 # It's a ticker or pair
                 if '-' not in arg:
-                    # Special case for XIAN itself - use XIAN-XUSDC
-                    if arg.upper() == "XIAN":
-                        context.args = ["XIAN-XUSDC", "72h"]
-                    else:
-                        # It's a ticker, construct ticker-XIAN pair
-                        context.args = [f"{arg.upper()}-XIAN", "72h"]
+                    # It's a ticker, construct ticker-XIAN pair
+                    context.args = [f"{arg.upper()}-XIAN", "72h"]
                 else:
                     # It's already a pair, add default timeframe
                     context.args = [arg, "72h"]
         elif len(context.args) == 2:
-            # If first argument is just a ticker (no dash), check for special cases
+            # If first argument is just a ticker (no dash), construct ticker-XIAN pair
             if '-' not in context.args[0]:
-                # Special case for XIAN with timeframe - use XIAN-XUSDC
-                if context.args[0].upper() == "XIAN":
-                    context.args[0] = "XIAN-XUSDC"
-                else:
-                    context.args[0] = f"{context.args[0].upper()}-XIAN"
+                context.args[0] = f"{context.args[0].upper()}-XIAN"
         else:
             await update.message.reply_text(
                 await self.get_info()
@@ -139,21 +112,9 @@ class Chart(TGBFPlugin):
                 return
 
         try:
-            # Special handling for invalid tokens (like "poop")
+            # Find the pair by symbols
             pair = await self.find_pair_by_symbols(base_symbol, quote_symbol)
 
-            # If pair not found and it was a non-default token, try with default pair
-            if not pair and base_symbol.upper() != "XIAN" and quote_symbol.upper() != "XUSDC":
-                # Let the user know we're falling back to default pair
-                await update.message.reply_text(
-                    f"{con.ERROR} Trading pair {base_symbol}-{quote_symbol} not found, falling back to XIAN-XUSDC"
-                )
-                # Update the arguments and symbols to use default pair
-                context.args[0] = "XIAN-XUSDC"
-                base_symbol, quote_symbol = "XIAN", "XUSDC"
-                pair = await self.find_pair_by_symbols(base_symbol, quote_symbol)
-
-            # If still no pair found (even for default), exit with error
             if not pair:
                 await update.message.reply_text(f"{con.ERROR} Trading pair {base_symbol}-{quote_symbol} not found")
                 return
@@ -162,7 +123,7 @@ class Chart(TGBFPlugin):
             base_is_token0 = pair.get('token0_symbol', '').upper() == base_symbol.upper()
 
             # Get swap events
-            events = await self.get_cached_swap_events(pair['id'])
+            events = await self.fetch_swap_events(pair['id'])
 
             if not events:
                 await update.message.reply_text(f"{con.ERROR} No swap events found for {base_symbol}-{quote_symbol}")
@@ -356,112 +317,7 @@ class Chart(TGBFPlugin):
             self.log.error(f"Chart error: {e}")
             await self.notify(e)
 
-    async def get_cached_pairs(self):
-        """Get pairs from cache with fallback to live fetch"""
-        pairs = self.cache_db.get('pairs')
-        if not pairs:
-            # Cache miss - fetch live data
-            pairs = await self.fetch_pairs()
-            if pairs:
-                self.cache_db.set('pairs', pairs)
-                self.cache_db.dump()
-        return pairs or []
-
-    async def get_cached_token_symbols(self, token_contracts=None):
-        """Get token symbols from cache with fallback to live fetch"""
-        symbols = self.cache_db.get('token_symbols') or {}
-
-        # If specific contracts were requested, get all symbols
-        if token_contracts is None:
-            pairs = await self.get_cached_pairs()
-            token_contracts = {p['token0'] for p in pairs} | {p['token1'] for p in pairs}
-
-        # Find missing symbols that need to be fetched
-        missing = [c for c in token_contracts if c not in symbols]
-        if missing:
-            new_symbols = await self.fetch_token_symbols(missing)
-            symbols.update(new_symbols)
-            self.cache_db.set('token_symbols', symbols)
-            self.cache_db.dump()
-
-        return symbols
-
-    async def get_cached_swap_events(self, pair_id):
-        """Get swap events from cache with fallback to live fetch"""
-        key = f"swaps:{pair_id}"
-        events = self.cache_db.get(key)
-        if not events:
-            # Cache miss - fetch live data
-            events = await self.fetch_swap_events(pair_id)
-            if events:
-                self.cache_db.set(key, events)
-                self.cache_db.dump()
-        return events
-
-    async def _refresh_cache_job(self, context):
-        """Background job to refresh the cache periodically"""
-        try:
-            # Fetch and update pairs
-            pairs = await self.fetch_pairs()
-            if pairs:
-                self.cache_db.set('pairs', pairs)
-
-            # Collect all token contracts
-            token_contracts = set()
-            for pair in pairs:
-                token_contracts.add(pair['token0'])
-                token_contracts.add(pair['token1'])
-
-            # Fetch and update token symbols
-            token_symbols = await self.fetch_token_symbols(list(token_contracts))
-            current_symbols = self.cache_db.get('token_symbols') or {}
-            current_symbols.update(token_symbols)
-            self.cache_db.set('token_symbols', current_symbols)
-
-            # Fetch and update swap events for each pair
-            tasks = [self.fetch_swap_events(p['id']) for p in pairs]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for p, ev in zip(pairs, results):
-                if not isinstance(ev, Exception) and ev:
-                    self.cache_db.set(f"swaps:{p['id']}", ev)
-
-            # Save all changes to disk
-            self.cache_db.dump()
-        except Exception as e:
-            self.log.error(f"Cache refresh error: {e}")
-            await self.notify(e)
-
-    async def find_pair_by_symbols(self, base_symbol, quote_symbol='XUSDC'):
-        """Find a pair by base and quote symbols, using cache with fallback"""
-        # Get all pairs from cache
-        pairs = await self.get_cached_pairs()
-        if not pairs:
-            return None
-
-        # Get token symbols from cache
-        token_contracts = set()
-        for pair in pairs:
-            token_contracts.add(pair['token0'])
-            token_contracts.add(pair['token1'])
-        token_symbols = await self.get_cached_token_symbols(token_contracts)
-
-        # Find the pair with matching symbols
-        for pair in pairs:
-            token0_symbol = token_symbols.get(pair['token0'], '').upper()
-            token1_symbol = token_symbols.get(pair['token1'], '').upper()
-
-            # Check for match in either direction
-            if (token0_symbol == base_symbol.upper() and token1_symbol == quote_symbol.upper()) or \
-                    (token1_symbol == base_symbol.upper() and token0_symbol == quote_symbol.upper()):
-                # Store the symbols for later use
-                pair['token0_symbol'] = token_symbols.get(pair['token0'], pair['token0'])
-                pair['token1_symbol'] = token_symbols.get(pair['token1'], pair['token1'])
-                return pair
-
-        return None
-
     async def fetch_pairs(self):
-        """Fetch pairs from GraphQL API"""
         pairs_query = await self.get_resource("get_pairs.gql")
         result = await self.fetch_graphql(pairs_query)
         pairs = []
@@ -520,6 +376,38 @@ class Chart(TGBFPlugin):
 
         return token_symbols
 
+    async def find_pair_by_symbols(self, base_symbol, quote_symbol='XUSDC'):
+        """Find a pair by base and quote symbols"""
+        # Get all pairs
+        pairs = await self.fetch_pairs()
+
+        if not pairs:
+            return None
+
+        # Get unique token contracts
+        token_contracts = set()
+        for pair in pairs:
+            token_contracts.add(pair['token0'])
+            token_contracts.add(pair['token1'])
+
+        # Get token symbols
+        token_symbols = await self.fetch_token_symbols(list(token_contracts))
+
+        # Find the pair with matching symbols
+        for pair in pairs:
+            token0_symbol = token_symbols.get(pair['token0'], '').upper()
+            token1_symbol = token_symbols.get(pair['token1'], '').upper()
+
+            # Check for match in either direction
+            if (token0_symbol == base_symbol.upper() and token1_symbol == quote_symbol.upper()) or \
+                    (token1_symbol == base_symbol.upper() and token0_symbol == quote_symbol.upper()):
+                # Store the symbols for later use
+                pair['token0_symbol'] = token_symbols.get(pair['token0'], pair['token0'])
+                pair['token1_symbol'] = token_symbols.get(pair['token1'], pair['token1'])
+                return pair
+
+        return None
+
     async def fetch_swap_events(self, pair_id):
         """Fetch swap events for a specific pair"""
         query = await self.get_resource("get_swap_events.gql")
@@ -530,6 +418,9 @@ class Chart(TGBFPlugin):
         """Convert swap events to candlestick data - similar to web implementation"""
         if not events:
             return []
+
+        # Hardcode the first trade timestamp
+        FIRST_TRADE_TIMESTAMP = datetime.fromisoformat("2025-03-27T17:29:38".replace('Z', '+00:00'))
 
         # Extract trades
         trades = []
@@ -585,7 +476,10 @@ class Chart(TGBFPlugin):
 
         # Get time boundaries for candles
         current_time = datetime.utcnow()
-        start_time = current_time - timedelta(minutes=interval_minutes * limit)
+        requested_start_time = current_time - timedelta(minutes=interval_minutes * limit)
+
+        # Ensure we don't go before the first trade timestamp
+        start_time = max(requested_start_time, FIRST_TRADE_TIMESTAMP)
 
         # Round to interval boundaries (as in web implementation)
         rounded_start = start_time.replace(
