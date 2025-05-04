@@ -290,8 +290,6 @@ class Chart(TGBFPlugin):
                 node = edge["node"]
 
                 # Parse data
-                data_indexed = json.loads(node["dataIndexed"]) if isinstance(node["dataIndexed"], str) else node[
-                    "dataIndexed"]
                 swap_data = json.loads(node["data"]) if isinstance(node["data"], str) else node["data"]
 
                 # Parse timestamp
