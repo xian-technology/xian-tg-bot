@@ -8,7 +8,7 @@ from telegram.ext import CallbackContext, CommandHandler
 class Approve(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.approve_callback, block=False))
+        await self.add_handler(CommandHandler("approve_contract", self.approve_callback, block=False))
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
@@ -40,6 +40,12 @@ class Approve(TGBFPlugin):
         wallet = await self.get_wallet(update.effective_user.id)
         xian = await self.get_xian(wallet=wallet)
 
+        event_plugin = self.plugins['event']
+        if not event_plugin.is_node_connected():
+            await message.edit_text(f"{con.ERROR} Node connection is down. Please try again later.")
+            await event_plugin.force_reconnect()
+            return
+
         try:
             # Approve contract
             approve = xian.approve(contract, token=token, amount=amount)
@@ -65,6 +71,6 @@ class Approve(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.STOP} {result}")
 
-            await self.plugins['event'].track_tx(tx_hash, tx_result)
+            await event_plugin.track_tx(tx_hash, tx_result)
         else:
             await message.edit_text(f"{con.STOP} {approve['message']}")
