@@ -2,6 +2,7 @@ import websockets
 import asyncio
 import json
 import gc
+import time
 
 from plugin import TGBFPlugin
 from xian_py.encoding import decode_str
@@ -13,16 +14,40 @@ class Event(TGBFPlugin):
     execute = dict()
     # Store futures for transaction waiting
     futures: Dict[str, asyncio.Future] = dict()
+    # Store pending transactions during reconnection
+    pending_tx: Dict[str, Tuple[str, Optional[Callable], bool, int]] = dict()
     event = str()
+    # Connection status
+    is_connected = False
+    last_heartbeat = 0
+    ws_task = None
 
     async def init(self):
         self.event = self.cfg.get('event')
-        asyncio.create_task(self.websocket_loop())
+        self.ws_task = asyncio.create_task(self.websocket_loop())
+        # Start heartbeat check
+        self.run_repeating(self.check_connection, interval=30)
+
+    async def cleanup(self):
+        if self.ws_task:
+            self.ws_task.cancel()
+
+    async def check_connection(self, context):
+        """Check if websocket connection is healthy"""
+        now = time.time()
+        # If no heartbeat for 60 seconds and we think we're connected
+        if self.is_connected and (now - self.last_heartbeat > 60):
+            self.log.warning("Connection seems dead, forcing reconnect...")
+            self.is_connected = False
+            # Cancel existing task and start a new one
+            if self.ws_task:
+                self.ws_task.cancel()
+            self.ws_task = asyncio.create_task(self.websocket_loop())
 
     async def websocket_loop(self):
         retry_attempts = 0
-        max_retries = self.cfg.get('max_retries')
-        base_wait_time = self.cfg.get('base_wait_time')
+        max_retries = self.cfg.get('max_retries', 10)
+        base_wait_time = self.cfg.get('base_wait_time', 2)
 
         while True:
             try:
@@ -43,28 +68,70 @@ class Event(TGBFPlugin):
 
                     uri += '/websocket'
 
-                async with websockets.connect(uri) as ws:
+                self.log.info(f'Connecting to {uri}')
+
+                # Set a reasonable timeout for the connection
+                async with websockets.connect(uri, ping_interval=20, ping_timeout=30) as ws:
+                    self.is_connected = True
+                    self.last_heartbeat = time.time()
                     await self.on_open(ws)
+
+                    # Resubscribe to any pending transactions
+                    if self.pending_tx:
+                        self.log.info(f"Resubscribing to {len(self.pending_tx)} pending transactions")
+                        for tx_hash, (tx_hash, func, wait, timeout) in self.pending_tx.items():
+                            await self.track_tx(tx_hash, func, wait, timeout)
+                        self.pending_tx.clear()
+
+                    # Reset retry attempts on successful connection
+                    retry_attempts = 0
+
                     try:
                         async for message in ws:
+                            self.last_heartbeat = time.time()
                             await self.on_message(ws, message)
-                            # Reset retry attempts on successful message
-                            retry_attempts = 0
                     except websockets.ConnectionClosed as e:
+                        self.is_connected = False
                         await self.on_close(ws, e.code, e.reason)
+                        # Store pending transactions for resubscription
+                        for tx_hash, func in self.execute.items():
+                            if tx_hash not in self.pending_tx:
+                                self.pending_tx[tx_hash] = (tx_hash, func, False, 30)
             except Exception as e:
+                self.is_connected = False
                 await self.on_error(e)
                 gc.collect()
 
                 retry_attempts += 1
                 if retry_attempts > max_retries:
                     self.log.error(f'Max retries reached. Stopping websocket loop.')
+                    # Fail all pending transactions
+                    await self.fail_all_pending("Connection to node lost")
                     break
 
                 # Exponential backoff, cap at 60 seconds
                 wait_secs = min(base_wait_time * (2 ** (retry_attempts - 1)), 60)
                 self.log.info(f'Websocket reconnect after {wait_secs} seconds')
                 await asyncio.sleep(wait_secs)
+
+    async def fail_all_pending(self, reason="Connection failed"):
+        """Fail all pending transactions with the given reason"""
+        for tx_hash in list(self.execute.keys()):
+            callback = self.execute[tx_hash]
+            if callback:
+                try:
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(success=False, result=reason)
+                    else:
+                        callback(success=False, result=reason)
+                except Exception as e:
+                    self.log.error(f"Error calling callback for {tx_hash}: {e}")
+            del self.execute[tx_hash]
+
+        for tx_hash, future in list(self.futures.items()):
+            if not future.done():
+                future.set_result((False, reason))
+            del self.futures[tx_hash]
 
     async def on_message(self, ws, msg):
         self.log.info(f'Event {self.event}: {msg}')
@@ -139,6 +206,7 @@ class Event(TGBFPlugin):
 
     async def on_close(self, ws, status_code, msg):
         self.log.info(f'Websocket connection closed with code {status_code} and message {msg}')
+        self.is_connected = False
 
     async def on_open(self, ws):
         self.log.info("Websocket connection opened")
@@ -177,6 +245,15 @@ class Event(TGBFPlugin):
         Raises:
             asyncio.TimeoutError: If wait=True and the transaction is not confirmed within the timeout
         """
+        # If we're not connected, store for later resubscription
+        if not self.is_connected:
+            self.log.warning(f"Not connected! Adding tx {tx_hash} to pending list")
+            self.pending_tx[tx_hash] = (tx_hash, function_to_call, wait, timeout)
+
+            if wait:
+                return (False, "Node connection unavailable")
+            return None
+
         # Register the callback if provided
         if function_to_call:
             self.execute[tx_hash] = function_to_call
@@ -199,11 +276,27 @@ class Event(TGBFPlugin):
                 self.log.debug(f'Timeout waiting for transaction {tx_hash}')
                 if tx_hash in self.futures:
                     del self.futures[tx_hash]
+                if tx_hash in self.execute:
+                    del self.execute[tx_hash]
                 raise
             except Exception as e:
                 self.log.error(f'Error waiting for transaction {tx_hash}: {e}')
                 if tx_hash in self.futures:
                     del self.futures[tx_hash]
+                if tx_hash in self.execute:
+                    del self.execute[tx_hash]
                 raise
 
         return None
+
+    def is_node_connected(self):
+        """Return current connection status"""
+        return self.is_connected
+
+    async def force_reconnect(self):
+        """Force a reconnection to the websocket"""
+        self.log.info("Forcing reconnection to websocket")
+        self.is_connected = False
+        if self.ws_task:
+            self.ws_task.cancel()
+        self.ws_task = asyncio.create_task(self.websocket_loop())
