@@ -73,6 +73,12 @@ class Lottery(TGBFPlugin):
             )
             return
 
+        event_plugin = self.plugins['event']
+        if not event_plugin.is_node_connected():
+            await update.message.reply_text(f"{con.ERROR} Node connection is down. Please try again later.")
+            await event_plugin.force_reconnect()
+            return
+
         try:
             approved_amount = xian.get_approved_amount(lottery_contract, token=token_contract)
             self.log.debug(f'approved amount: {approved_amount}')
@@ -104,7 +110,7 @@ class Lottery(TGBFPlugin):
 
             if approve['success']:
                 try:
-                    success, result = await self.plugins['event'].track_tx(
+                    success, result = await event_plugin.track_tx(
                         tx_hash,
                         wait=True
                     )
@@ -189,7 +195,7 @@ class Lottery(TGBFPlugin):
                 return
 
         if send['success']:
-            await self.plugins['event'].track_tx(tx_hash, tx_result)
+            await event_plugin.track_tx(tx_hash, tx_result)
         else:
             await context.bot.send_message(
                 update.message.chat_id,
@@ -239,6 +245,8 @@ class Lottery(TGBFPlugin):
         # Since we don't have that combination of data otherwise
         self.kv_set(wallet.public_key, username)
 
+        event_plugin = self.plugins['event']
+
         # PARTICIPATE in lottery
         if lottery_command == 'add':
             try:
@@ -276,7 +284,7 @@ class Lottery(TGBFPlugin):
                         return
 
                 if send['success']:
-                    await self.plugins['event'].track_tx(tx_hash, tx_result)
+                    await event_plugin.track_tx(tx_hash, tx_result)
                     await context.bot.answer_callback_query(
                         update.callback_query.id,
                         f"{con.STARS} Transaction sent..."
@@ -343,7 +351,7 @@ class Lottery(TGBFPlugin):
                         return
 
                 if send['success']:
-                    await self.plugins['event'].track_tx(tx_hash, tx_result)
+                    await event_plugin.track_tx(tx_hash, tx_result)
                     await context.bot.answer_callback_query(
                         update.callback_query.id,
                         f"{con.STARS} Transaction sent..."

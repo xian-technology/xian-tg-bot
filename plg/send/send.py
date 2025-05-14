@@ -117,6 +117,12 @@ class Send(TGBFPlugin):
 
         await message.edit_text(f"{con.WAIT} Sending {ticker} ...")
 
+        event_plugin = self.plugins['event']
+        if not event_plugin.is_node_connected():
+            await message.edit_text(f"{con.ERROR} Node connection is down. Please try again later.")
+            await event_plugin.force_reconnect()
+            return
+
         try:
             # Send token
             send = xian.send(amount, to, token=contract)
@@ -143,6 +149,6 @@ class Send(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.STOP} {result}")
 
-            await self.plugins['event'].track_tx(tx_hash, tx_result)
+            await event_plugin.track_tx(tx_hash, tx_result)
         else:
             await message.edit_text(f"{con.STOP} {send['message']}")

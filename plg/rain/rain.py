@@ -196,6 +196,12 @@ class Rain(TGBFPlugin):
             "contract": contract
         }
 
+        event_plugin = self.plugins['event']
+        if not event_plugin.is_node_connected():
+            await message.edit_text(f"{con.ERROR} Node connection is down. Please try again later.")
+            await event_plugin.force_reconnect()
+            return
+
         try:
             approved_amount = xian.get_approved_amount(multisend_contract, token=contract)
             self.log.debug(f'Approved amount: {approved_amount}')
@@ -226,7 +232,7 @@ class Rain(TGBFPlugin):
 
             if approve['success']:
                 try:
-                    success, result = await self.plugins['event'].track_tx(
+                    success, result = await event_plugin.track_tx(
                         tx_hash,
                         wait=True
                     )
@@ -255,7 +261,7 @@ class Rain(TGBFPlugin):
 
         if send['success']:
             try:
-                success, result = await self.plugins['event'].track_tx(
+                success, result = await event_plugin.track_tx(
                     tx_hash,
                     wait=True
                 )
