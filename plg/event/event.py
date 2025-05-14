@@ -19,13 +19,14 @@ class Event(TGBFPlugin):
     event = str()
     # Connection status
     is_connected = False
-    last_heartbeat = 0
+    last_message = 0
     ws_task = None
+    ws = None
 
     async def init(self):
         self.event = self.cfg.get('event')
         self.ws_task = asyncio.create_task(self.websocket_loop())
-        # Start heartbeat check
+        # Start health check
         self.run_repeating(self.check_connection, interval=30)
 
     async def cleanup(self):
@@ -33,16 +34,22 @@ class Event(TGBFPlugin):
             self.ws_task.cancel()
 
     async def check_connection(self, context):
-        """Check if websocket connection is healthy"""
-        now = time.time()
-        # If no heartbeat for 60 seconds and we think we're connected
-        if self.is_connected and (now - self.last_heartbeat > 60):
-            self.log.warning("Connection seems dead, forcing reconnect...")
+        """Actively check connection health"""
+        if self.is_connected and self.ws and not self.ws.closed:
+            try:
+                # Send a ping frame to verify connection
+                ping_task = asyncio.create_task(self.ws.ping())
+                await asyncio.wait_for(ping_task, timeout=5.0)
+                self.log.debug("Health check: Connection is healthy")
+            except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
+                self.log.warning("Health check: Connection failed, forcing reconnect...")
+                self.is_connected = False
+                if self.ws_task:
+                    self.ws_task.cancel()
+                self.ws_task = asyncio.create_task(self.websocket_loop())
+        elif self.is_connected:
+            self.log.warning("Health check: Connection already closed, pending reconnect")
             self.is_connected = False
-            # Cancel existing task and start a new one
-            if self.ws_task:
-                self.ws_task.cancel()
-            self.ws_task = asyncio.create_task(self.websocket_loop())
 
     async def websocket_loop(self):
         retry_attempts = 0
@@ -64,39 +71,47 @@ class Event(TGBFPlugin):
                         uri = uri.replace('http://', 'ws://')
                     else:
                         self.log.error("Unsupported URI scheme in node URL.")
-                        return  # Or handle the error appropriately
+                        return
 
                     uri += '/websocket'
 
                 self.log.info(f'Connecting to {uri}')
 
-                # Set a reasonable timeout for the connection
-                async with websockets.connect(uri, ping_interval=20, ping_timeout=30) as ws:
-                    self.is_connected = True
-                    self.last_heartbeat = time.time()
-                    await self.on_open(ws)
+                # Store the websocket connection
+                self.ws = await websockets.connect(
+                    uri,
+                    ping_interval=20,
+                    ping_timeout=30,
+                    close_timeout=5
+                )
 
-                    # Resubscribe to any pending transactions
-                    if self.pending_tx:
-                        self.log.info(f"Resubscribing to {len(self.pending_tx)} pending transactions")
-                        for tx_hash, (tx_hash, func, wait, timeout) in self.pending_tx.items():
-                            await self.track_tx(tx_hash, func, wait, timeout)
-                        self.pending_tx.clear()
+                self.is_connected = True
+                self.last_message = time.time()
+                await self.on_open(self.ws)
 
-                    # Reset retry attempts on successful connection
-                    retry_attempts = 0
+                # Resubscribe to any pending transactions
+                if self.pending_tx:
+                    self.log.info(f"Resubscribing to {len(self.pending_tx)} pending transactions")
+                    for tx_hash, (tx_hash, func, wait, timeout) in self.pending_tx.items():
+                        await self.track_tx(tx_hash, func, wait, timeout)
+                    self.pending_tx.clear()
 
-                    try:
-                        async for message in ws:
-                            self.last_heartbeat = time.time()
-                            await self.on_message(ws, message)
-                    except websockets.ConnectionClosed as e:
-                        self.is_connected = False
-                        await self.on_close(ws, e.code, e.reason)
-                        # Store pending transactions for resubscription
-                        for tx_hash, func in self.execute.items():
-                            if tx_hash not in self.pending_tx:
-                                self.pending_tx[tx_hash] = (tx_hash, func, False, 30)
+                # Reset retry attempts on successful connection
+                retry_attempts = 0
+
+                try:
+                    async for message in self.ws:
+                        self.last_message = time.time()
+                        await self.on_message(self.ws, message)
+                except websockets.ConnectionClosed as e:
+                    self.is_connected = False
+                    await self.on_close(self.ws, e.code, e.reason)
+                    # Store pending transactions for resubscription
+                    for tx_hash, func in self.execute.items():
+                        if tx_hash not in self.pending_tx:
+                            self.pending_tx[tx_hash] = (tx_hash, func, False, 30)
+                finally:
+                    self.is_connected = False
             except Exception as e:
                 self.is_connected = False
                 await self.on_error(e)
@@ -297,6 +312,8 @@ class Event(TGBFPlugin):
         """Force a reconnection to the websocket"""
         self.log.info("Forcing reconnection to websocket")
         self.is_connected = False
+        if self.ws:
+            await self.ws.close()
         if self.ws_task:
             self.ws_task.cancel()
         self.ws_task = asyncio.create_task(self.websocket_loop())
