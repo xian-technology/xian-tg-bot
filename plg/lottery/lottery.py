@@ -263,10 +263,12 @@ class Lottery(TGBFPlugin):
 
                 async def tx_result(success: str, result: str):
                     if success:
-                        await update.callback_query.message.reply_text(
+                        reply_msg = await update.callback_query.message.reply_text(
                             f'{con.HEART_GREEN} User {username} participates in the lottery. {link}',
                             disable_web_page_preview=True
                         )
+                        await self.remove_msg_after(reply_msg, after_secs=10)
+
                         old_msg = self.kv_get(str(lottery_id))
                         new_msg = self.update_user_pool(old_msg)
                         self.kv_set(str(lottery_id), new_msg)
@@ -276,11 +278,13 @@ class Lottery(TGBFPlugin):
                             reply_markup=self.lottery_buttons(lottery_id)
                         )
                     else:
-                        await update.callback_query.message.reply_text(
+                        error_msg = await update.callback_query.message.reply_text(
                             f'{con.ERROR} Could not add {username} to the lottery: '
                             f'<code>{result}</code>.',
                             disable_web_page_preview=True
                         )
+                        await self.remove_msg_after(error_msg, after_secs=10)
+
                         return
 
                 if send['success']:
@@ -290,11 +294,13 @@ class Lottery(TGBFPlugin):
                         f"{con.STARS} Transaction sent..."
                     )
                 else:
-                    await update.callback_query.message.reply_text(
+                    error_msg = await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not add {username} to the lottery: '
                         f'<code>{send["message"]}</code>.',
                         disable_web_page_preview=True
                     )
+                    await self.remove_msg_after(error_msg, after_secs=10)
+
                     await context.bot.answer_callback_query(
                         update.callback_query.id,
                         f"{con.ERROR} Something went wrong..."
@@ -343,11 +349,13 @@ class Lottery(TGBFPlugin):
                             )
                         )
                     else:
-                        await update.callback_query.message.reply_text(
+                        error_msg = await update.callback_query.message.reply_text(
                             f'{con.ERROR} Could not end the lottery: '
                             f'<code>{result}</code>.',
                             disable_web_page_preview=True
                         )
+                        await self.remove_msg_after(error_msg, after_secs=10)
+
                         return
 
                 if send['success']:
@@ -357,11 +365,13 @@ class Lottery(TGBFPlugin):
                         f"{con.STARS} Transaction sent..."
                     )
                 else:
-                    await update.callback_query.message.reply_text(
+                    error_msg = await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not end the lottery: '
                         f'<code>{send["message"]}</code>.',
                         disable_web_page_preview=True
                     )
+                    await self.remove_msg_after(error_msg, after_secs=10)
+
                     await context.bot.answer_callback_query(
                         update.callback_query.id,
                         f"{con.ERROR} Something went wrong..."
