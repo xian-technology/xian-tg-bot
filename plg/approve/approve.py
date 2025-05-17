@@ -42,9 +42,7 @@ class Approve(TGBFPlugin):
 
         event_plugin = self.plugins['event']
         if not event_plugin.is_node_connected():
-            await message.edit_text(f"{con.ERROR} Node connection is down. Please try again later.")
             await event_plugin.force_reconnect()
-            return
 
         try:
             # Approve contract

@@ -75,9 +75,7 @@ class Lottery(TGBFPlugin):
 
         event_plugin = self.plugins['event']
         if not event_plugin.is_node_connected():
-            await update.message.reply_text(f"{con.ERROR} Node connection is down. Please try again later.")
             await event_plugin.force_reconnect()
-            return
 
         try:
             approved_amount = xian.get_approved_amount(lottery_contract, token=token_contract)
@@ -246,6 +244,8 @@ class Lottery(TGBFPlugin):
         self.kv_set(wallet.public_key, username)
 
         event_plugin = self.plugins['event']
+        if not event_plugin.is_node_connected():
+            await event_plugin.force_reconnect()
 
         # PARTICIPATE in lottery
         if lottery_command == 'add':
