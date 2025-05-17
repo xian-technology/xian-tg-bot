@@ -1,3 +1,5 @@
+import time
+
 import constants as con
 
 from plugin import TGBFPlugin
@@ -167,10 +169,18 @@ class Testnet(TGBFPlugin):
                 )
                 return
 
+            # Check if Event plugin is available
+            event_plugin = self.plugins.get('event')
+
             try:
                 # Send testnet XIAN from user's wallet
                 send = testnet.send(amount, to_address)
                 self.log.debug(f'Send TX: {send}')
+
+                if not send.get("success"):
+                    await message.edit_text(f"{con.ERROR} Transaction failed: {send.get('message', 'Unknown error')}")
+                    return
+
             except Exception as e:
                 msg = f"SEND Error: {e}"
                 self.log.error(msg)
@@ -178,10 +188,72 @@ class Testnet(TGBFPlugin):
                 await message.edit_text(f"{con.ERROR} {str(e)}")
                 return
 
-            await message.edit_text(
-                f"{con.DONE} Sent {amount} tXIAN from your bot wallet to\n"
-                f"<code>{to_address}</code>"
-            )
+            tx_hash = send.get("tx_hash")
+            explorer_url = self.cfg_global.get('xian', 'explorer', "")
+
+            # If we can't track the transaction, show immediate success
+            if not event_plugin or not tx_hash or not event_plugin.is_node_connected():
+                link_text = f'\n<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>' if explorer_url and tx_hash else ""
+                await message.edit_text(
+                    f"{con.DONE} Sent {amount} tXIAN from your bot wallet to\n"
+                    f"<code>{to_address}</code>{link_text}",
+                    disable_web_page_preview=True
+                )
+                return
+
+            # Update message to show we're waiting for confirmation
+            await message.edit_text(f"{con.WAIT} Sent {amount} tXIAN, waiting for confirmation...")
+
+            # Create a flag to track if the callback was called
+            callback_completed = False
+
+            async def tx_result(success, result):
+                nonlocal callback_completed
+                callback_completed = True
+
+                if success:
+                    link_text = f'\n<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>' if explorer_url else ""
+                    await message.edit_text(
+                        f"{con.DONE} Sent {amount} tXIAN from your bot wallet to\n"
+                        f"<code>{to_address}</code>{link_text}",
+                        disable_web_page_preview=True
+                    )
+                else:
+                    await message.edit_text(
+                        f"{con.ERROR} Transaction failed: {result}\n"
+                        f"Address: <code>{to_address}</code>"
+                    )
+
+            # Track the transaction
+            try:
+                # Set a reasonable timeout (20 seconds)
+                timeout = 20
+                self.log.info(f"Tracking transaction {tx_hash} with timeout {timeout}s")
+
+                # Start tracking but don't wait
+                event_plugin.track_tx(tx_hash, tx_result)
+
+                # Wait for the callback to be called or timeout
+                start_time = time.time()
+                while not callback_completed and time.time() - start_time < timeout:
+                    await asyncio.sleep(1)
+
+                # If we timed out, update the message
+                if not callback_completed:
+                    link_text = f'\n<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>' if explorer_url else ""
+                    await message.edit_text(
+                        f"{con.INFO} Sent {amount} tXIAN to <code>{to_address}</code>, but confirmation is taking longer than expected. "
+                        f"The transaction was submitted and should complete soon.{link_text}",
+                        disable_web_page_preview=True
+                    )
+            except Exception as e:
+                self.log.error(f"Error tracking transaction: {e}")
+                link_text = f'\n<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>' if explorer_url else ""
+                await message.edit_text(
+                    f"{con.DONE} Sent {amount} tXIAN from your bot wallet to\n"
+                    f"<code>{to_address}</code>{link_text}",
+                    disable_web_page_preview=True
+                )
 
         except Exception as e:
             self.log.error(f"Unexpected error: {e}")
