@@ -3,6 +3,7 @@ import json
 import asyncio
 import websockets
 
+import utils as utl
 import constants as con
 
 from plugin import TGBFPlugin
@@ -59,30 +60,70 @@ class Buybot(TGBFPlugin):
 
         subcommand = context.args[0].lower()
 
+        # Get current chat_id and thread_id if in a topic
+        chat_id = update.effective_chat.id
+        thread_id = update.message.message_thread_id
+
+        # Create a chat entry that includes both chat_id and thread_id if in a topic
+        chat_entry = {"chat_id": chat_id, "thread_id": thread_id} if thread_id else chat_id
+
         if subcommand == 'start':
-            # Add current chat to watched chats
-            chat_id = update.effective_chat.id
-            if chat_id not in self.watched_chats:
-                self.watched_chats.append(chat_id)
-                await update.message.reply_text(f"{con.DONE} Buy-bot started in this chat")
+            # Check if chat is already in the watched chats
+            is_watched = False
+            for existing_entry in self.watched_chats:
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        is_watched = True
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    is_watched = True
+                    break
+
+            # Add current chat/thread to watched chats
+            if not is_watched:
+                self.watched_chats.append(chat_entry)
+                await update.message.reply_text(f"{con.DONE} Buy-bot started in this " +
+                                                ("topic" if thread_id else "chat"))
                 self.cfg.set(self.watched_chats, "watched_chats")
             else:
-                await update.message.reply_text(f"{con.INFO} Buy-bot already active in this chat")
+                await update.message.reply_text(f"{con.INFO} Buy-bot already active in this " +
+                                                ("topic" if thread_id else "chat"))
 
         elif subcommand == 'stop':
-            # Remove current chat from watched chats
-            chat_id = update.effective_chat.id
-            if chat_id in self.watched_chats:
-                self.watched_chats.remove(chat_id)
-                await update.message.reply_text(f"{con.DONE} Buy-bot stopped in this chat")
+            # Find and remove the current chat/thread from watched chats
+            removed = False
+            for i, existing_entry in enumerate(self.watched_chats.copy()):
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        self.watched_chats.pop(i)
+                        removed = True
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    self.watched_chats.pop(i)
+                    removed = True
+                    break
+
+            if removed:
+                await update.message.reply_text(f"{con.DONE} Buy-bot stopped in this " +
+                                                ("topic" if thread_id else "chat"))
                 self.cfg.set(self.watched_chats, "watched_chats")
             else:
-                await update.message.reply_text(f"{con.INFO} Buy-bot not active in this chat")
+                await update.message.reply_text(f"{con.INFO} Buy-bot not active in this " +
+                                                ("topic" if thread_id else "chat"))
 
         elif subcommand == 'status':
-            # Show status information
-            active = update.effective_chat.id in self.watched_chats
-            status = f"{con.GREEN} Active" if active else f"{con.RED} Inactive"
+            # Check if this chat/thread is being watched
+            is_active = False
+            for existing_entry in self.watched_chats:
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        is_active = True
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    is_active = True
+                    break
+
+            status = f"{con.GREEN} Active" if is_active else f"{con.RED} Inactive"
             contracts = ", ".join(self.watched_contracts)
             functions = ", ".join(f for f in self.watched_functions)
 
@@ -95,6 +136,7 @@ class Buybot(TGBFPlugin):
             )
             await update.message.reply_text(msg)
 
+        # Rest of the method remains the same
         elif subcommand == 'add' and len(context.args) > 1:
             # Add contract or function to watch
             item_type = context.args[1].lower()
@@ -395,20 +437,58 @@ class Buybot(TGBFPlugin):
         if pair_id in self.pair_info_cache:
             return self.pair_info_cache[pair_id]
 
-        # Known pairs mapping
-        pairs = {
-            1: ("con_usdc", "currency", "XUSDC", "XIAN"),  # token0, token1, symbol0, symbol1
-            2: ("con_poop_coin", "currency", "POOP", "XIAN"),
-            # Add more known pairs as needed
-        }
+        # Get pairs from config
+        watched_pairs = self.cfg.get("watched_pairs") or []
+
+        # Convert to dictionary for quick lookup
+        pairs = {}
+        for pair in watched_pairs:
+            if 'id' in pair and 'token0' in pair and 'token1' in pair and 'symbol0' in pair and 'symbol1' in pair:
+                pairs[pair['id']] = (
+                    pair['token0'],
+                    pair['token1'],
+                    pair['symbol0'],
+                    pair['symbol1']
+                )
+
+        # Default pairs if none in config
+        if not pairs:
+            pairs = {
+                1: ("con_usdc", "currency", "XUSDC", "XIAN"),
+                2: ("con_poop_coin", "currency", "POOP", "XIAN")
+            }
 
         if pair_id in pairs:
             self.pair_info_cache[pair_id] = pairs[pair_id]
             return pairs[pair_id]
 
-        # For unknown pairs, we'd need to query the blockchain
-        # This is not implemented yet, so return None
+        # For unknown pairs, return None
         return None
+
+    async def get_token_for_pair(self, pair_id, is_source=True):
+        """Get token contract for a pair ID using config"""
+        # Get pairs from config
+        watched_pairs = self.cfg.get("watched_pairs") or []
+
+        # Convert to dictionary for quick lookup
+        pairs = {}
+        for pair in watched_pairs:
+            if 'id' in pair and 'token0' in pair and 'token1' in pair:
+                pairs[pair['id']] = (pair['token0'], pair['token1'])
+
+        # Default pairs if none in config
+        if not pairs:
+            pairs = {
+                1: ("con_usdc", "currency")
+            }
+
+        if pair_id in pairs:
+            if is_source:
+                return pairs[pair_id][0]
+            else:
+                return pairs[pair_id][1]
+
+        return "Unknown"
 
     async def send_dex_notification(self, contract, function, arguments, tx_hash):
         """Send DEX event notification to all watched chats with improved formatting"""
@@ -420,8 +500,6 @@ class Buybot(TGBFPlugin):
             # Get pair information if available
             pair_info = await self.get_pair_info(pair_id)
             token_symbol = None
-            base_token_symbol = None
-            quote_token_symbol = None
 
             # For XIAN-XUSDC pair (pair_id 1), we want to show transactions where people BUY XIAN
             if pair_id == 1:  # XIAN-XUSDC pair
@@ -500,14 +578,18 @@ class Buybot(TGBFPlugin):
             # Format buy message
             title = f"{token_symbol} Buy!"
 
+            # Format amounts using utils.format_float to remove trailing zeros
+            spent_amount = utl.format_float(amount_in_float)
+            got_amount = utl.format_float(amount_out_float)
+
             # Split action text into two lines for better readability
-            spent_text = f"💸 Spent {amount_in_float:.6f} {spent_token}"
-            got_text = f"📈 Got {amount_out_float:.6f} {got_token}"
+            spent_text = f"💸 Spent <code>{spent_amount}</code> {spent_token}"
+            got_text = f"💰 Got <code>{got_amount}</code> {got_token}"
 
             # Get links
-            explorer_url = self.cfg_global.get('xian', 'explorer', "https://explorer.xian.org")
+            explorer_url = self.cfg_global.get('xian', 'explorer')
             tx_link = f"{explorer_url}/tx/{tx_hash}"
-            address_link = f"{explorer_url}/account/{buyer_address}"
+            address_link = f"{explorer_url}/addresses/{buyer_address}"
 
             # Build the message
             message = (
@@ -523,17 +605,30 @@ class Buybot(TGBFPlugin):
                 self.watched_chats = []
 
             # Send to all watched chats
-            for chat_id in self.watched_chats:
+            for chat_entry in self.watched_chats:
                 try:
+                    # Check if this is a chat_id or a dict with chat_id and thread_id
+                    chat_id = None
+                    thread_id = None
+
+                    if isinstance(chat_entry, dict):
+                        chat_id = chat_entry.get("chat_id")
+                        thread_id = chat_entry.get("thread_id")
+                    else:
+                        chat_id = chat_entry
+
+                    # Send message with thread_id if available
                     await self.tgb.bot.updater.bot.send_message(
                         chat_id=chat_id,
                         text=message,
+                        message_thread_id=thread_id,
                         parse_mode="HTML",
                         disable_web_page_preview=True
                     )
-                    self.log.info(f"Sent DEX notification to chat {chat_id}")
+                    self.log.info(f"Sent DEX notification to chat {chat_id}" +
+                                  (f" thread {thread_id}" if thread_id else ""))
                 except Exception as e:
-                    self.log.error(f"Failed to send DEX notification to chat {chat_id}: {e}")
+                    self.log.error(f"Failed to send DEX notification to chat {chat_entry}: {e}")
 
         except Exception as e:
             self.log.error(f'Error sending DEX notification: {e}')

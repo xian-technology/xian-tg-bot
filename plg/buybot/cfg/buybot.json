@@ -2,7 +2,10 @@
     "category": "Xian",
     "description": "Monitor DEX transactions in real-time",
     "watched_chats": [
-        -1001154540877
+        {
+            "chat_id": -1001154540877,
+            "thread_id": 5946
+        }
     ],
     "watched_contracts": [
         "con_dex_v2"
@@ -11,5 +14,70 @@
         "swapExactTokenForTokenSupportingFeeOnTransferTokens",
         "swapExactTokenForToken",
         "swapTokenForExactToken"
+    ],
+    "watched_pairs": [
+        {
+            "id": 1,
+            "token0": "con_usdc",
+            "token1": "currency",
+            "symbol0": "XUSDC",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 2,
+            "token0": "con_xtfu",
+            "token1": "currency",
+            "symbol0": "XTFU",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 4,
+            "token0": "con_xns_token",
+            "token1": "currency",
+            "symbol0": "XNS",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 5,
+            "token0": "con_poop_coin",
+            "token1": "currency",
+            "symbol0": "POOP",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 8,
+            "token0": "con_gold",
+            "token1": "currency",
+            "symbol0": "GOLD",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 9,
+            "token0": "con_big_nig_with_a_cig",
+            "token1": "currency",
+            "symbol0": "BIGNIG",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 10,
+            "token0": "con_xiandoge",
+            "token1": "currency",
+            "symbol0": "XOGE",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 12,
+            "token0": "con_beer",
+            "token1": "currency",
+            "symbol0": "BEER",
+            "symbol1": "XIAN"
+        },
+        {
+            "id": 17,
+            "token0": "con_xarb",
+            "token1": "currency",
+            "symbol0": "XARB",
+            "symbol1": "XIAN"
+        }
     ]
 }
