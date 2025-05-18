@@ -150,7 +150,7 @@ class Bless(TGBFPlugin):
         user_limit = self.cfg.get("user_limit")
         counter = 0
 
-        msg = f"on following users:\n"
+        msg = str()
 
         suffix = ", "
 
@@ -198,7 +198,7 @@ class Bless(TGBFPlugin):
         if amount_single.is_integer():
             amount_single = int(amount_single)
 
-        msg = f"Rained <code>{amount_single}</code> {ticker} each {msg}"
+        msg = f"Blessed each user with <code>{amount_single}</code> {ticker}:\n{msg}"
 
         # Remove last suffix
         msg = msg[:-len(suffix)]
