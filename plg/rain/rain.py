@@ -133,7 +133,7 @@ class Rain(TGBFPlugin):
             await message.edit_text(msg)
             return
 
-        # Exclude own user from users to airdrop on
+        # Exclude own user from airdrop
         user_data = [u for u in rain["data"] if u[0] != user_id]
 
         if len(user_data) < 1:
@@ -146,9 +146,6 @@ class Rain(TGBFPlugin):
 
         # Amount to airdrop to one user
         amount_single = float(f"{(amount_total / len(user_data)):.4f}")
-
-        from_user = update.message.from_user
-        from_username = "@" + from_user.username if from_user.username else from_user.first_name
 
         if amount_single.is_integer():
             amount_single = int(amount_single)
