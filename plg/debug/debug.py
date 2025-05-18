@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import psutil
 import platform
 import utils as utl
@@ -16,11 +17,12 @@ class Debug(TGBFPlugin):
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.logging()
-    @TGBFPlugin.send_typing()
     async def debug_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
             return
+
+        thread_id = update.effective_message.message_thread_id
 
         try:
             await update.message.delete()
@@ -57,9 +59,12 @@ class Debug(TGBFPlugin):
             if self.is_private(update.message):
                 await update.message.reply_text(msg)
             else:
+                chat_details = json.loads(update.effective_chat.to_json())
+                chat_details['thread_id'] = thread_id
+
                 await self.tgb.bot.bot.send_message(
                     update.effective_user.id,
-                    f"{msg}\n\nChat details: <code>{update.effective_chat.to_json()}</code>")
+                    f"{msg}\n\nChat details: <code>{chat_details}</code>")
         except Exception as e:
             self.log.error(f"Could not send debug info: {e}")
             await self.notify(e)
