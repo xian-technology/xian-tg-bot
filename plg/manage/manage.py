@@ -23,12 +23,15 @@ class Manage(TGBFPlugin):
         if not usr:
             return
 
-        try:
-            # Check if the topic is closed - indicating that an admin posted it
-            if msg.forum_topic_closed:
-                # No further action needed
-                return
+        chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
 
+        # If admin posts a message, then we can ignore it
+        chat_member = await context.bot.get_chat_member(chat_id, user_id)
+        if chat_member.status in ['administrator', 'creator']:
+            return
+
+        try:
             # Are we in the right topic?
             if msg.message_thread_id == self.cfg.get('thread_id'):
                 # Is user allowed to post?
