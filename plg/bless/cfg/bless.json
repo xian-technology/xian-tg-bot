@@ -1,0 +1,7 @@
+{
+    "category": "Xian",
+    "description": "Rain tokens on last active users with Xian username",
+    "contract": "con_multisend",
+    "function": "send",
+    "user_limit": 150
+}
