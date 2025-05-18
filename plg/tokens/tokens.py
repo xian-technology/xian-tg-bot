@@ -5,8 +5,6 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 
-# TODO: Add '/tokens add-all' command
-# TODO: Add '/tokens remove-all' command
 class Tokens(TGBFPlugin):
 
     async def init(self):
@@ -45,12 +43,15 @@ class Tokens(TGBFPlugin):
 
             # List all tokens
             if context.args[0].lower() == 'list':
-                msg = 'Contract - Ticker - Decimal places\n'
+                msg = str()
+
                 for token in tokens:
-                    msg += (f'<code>{token[1]}</code> - '
-                            f'<code>{token[2]}</code> - '
-                            f'<code>{token[3]}</code>\n')
-                if msg != 'Contract - Ticker - Decimal places\n':
+                    msg += (f'<code>'
+                            f'Ticker  : {token[2].upper()}\n'
+                            f'Contract: {token[1]}\n'
+                            f'Decimals: {token[3]}\n\n'
+                            f'</code>')
+                if msg:
                     await update.message.reply_text(msg)
                 else:
                     await update.message.reply_text(
@@ -58,6 +59,8 @@ class Tokens(TGBFPlugin):
                         f'You can add tokens with <code>/tokens contract_name</code>'
                     )
                 return
+
+            # Add all tokens
             elif context.args[0].lower() == 'add-all':
                 all_tokens_query = await self.get_resource("get_all_tokens.gql")
                 all_tokens_data = await self.fetch_graphql(all_tokens_query)
@@ -70,31 +73,98 @@ class Tokens(TGBFPlugin):
                 existing = [token[1] for token in tokens]
                 xian = await self.get_xian()
 
-                await update.message.reply_text(f"{con.WAIT} Adding all tokens...")
+                txt = (f"{con.WAIT} Adding all tokens. This will take a while. "
+                       f"You will get a message when it's done.")
+                await update.message.reply_text(txt)
 
                 for entry in all_tokens:
                     if entry['name'] in existing:
                         continue
 
-                    ticker = xian.get_state(
-                        entry['name'],
-                        'metadata',
-                        'token_symbol'
-                    )
-                    await self.exec_sql(
-                        sql_insert,
-                        user_id,
-                        entry['name'],
-                        ticker,
-                        decimals
-                    )
+                    try:
+                        ticker = xian.get_state(
+                            entry['name'],
+                            'metadata',
+                            'token_symbol'
+                        )
+                    except Exception as e:
+                        txt = f"{con.ERROR} Could not read token details for {entry['name']}: {e}"
+                        self.log.error(txt)
+                        await self.notify(txt)
+                        return
+
+                    if not entry['name'] or not ticker:
+                        continue
+
+                    try:
+                        await self.exec_sql(
+                            sql_insert,
+                            user_id,
+                            entry['name'],
+                            ticker,
+                            decimals
+                        )
+                    except Exception as e:
+                        self.log.debug(entry['name'])
+                        self.log.error(e)
                 await update.message.reply_text(f"{con.STARS} All tokens added!")
                 return
+
+            # Add recommended tokens
+            elif context.args[0].lower() == 'add-core':
+                txt = f"{con.WAIT} Adding tokens. This will take a while..."
+                await update.message.reply_text(txt)
+
+                core_tokens = self.cfg.get('core_tokens')
+
+                tokens = await self.get_tokens(user_id)
+                existing = [token[1] for token in tokens]
+
+                sql_insert = await self.get_resource("insert_token.sql")
+                decimals = self.cfg.get('default_decimals')
+
+                xian = await self.get_xian()
+
+                for token in core_tokens:
+                    if token in existing:
+                        continue
+
+                    try:
+                        ticker = xian.get_state(
+                            token,
+                            'metadata',
+                            'token_symbol'
+                        )
+                    except Exception as e:
+                        txt = f"{con.ERROR} Could not read token details for {token}: {e}"
+                        self.log.error(txt)
+                        await self.notify(txt)
+                        return
+
+                    try:
+                        await self.exec_sql(
+                            sql_insert,
+                            user_id,
+                            token,
+                            ticker,
+                            decimals
+                        )
+                    except Exception as e:
+                        txt = f"{con.ERROR} Could not add token {token}: {e}"
+                        self.log.error(txt)
+                        await self.notify(txt)
+
+                msg = f"{con.DONE} Added recommended tokens"
+                await update.message.reply_text(msg)
+                return
+
+            # Remove all tokens
             elif context.args[0].lower() == 'remove-all':
                 remove_all_query = await self.get_resource("delete_all_tokens.sql")
                 await self.exec_sql(remove_all_query, user_id)
                 await update.message.reply_text(f"{con.STARS} All tokens removed!")
                 return
+
             else:
                 await update.message.reply_text(await self.get_info())
                 return
