@@ -144,27 +144,18 @@ class Bless(TGBFPlugin):
         msg = f"{con.RAIN} Blessing users..."
         message = await message.edit_text(msg)
 
-        # List of addresses that will get the airdrop
-        addresses = list()
-
         user_limit = self.cfg.get("user_limit")
-        counter = 0
-
+        eligible_users = 0
+        addresses = []
         msg = str()
-
         suffix = ", "
 
+        # Check all users until we find enough eligible ones
         for user in user_data:
-            counter += 1
-
-            if counter > user_limit:
-                self.log.warning(f"User limit of {user_limit} hit")
-                break
-
             to_user_id = user[0]
             to_username = user[1]
 
-            # Exclude users without "xian.org" in name
+            # Check if user has xian.org in name
             try:
                 chat = await context.bot.get_chat(to_user_id)
                 first_name = chat.first_name
@@ -176,16 +167,23 @@ class Bless(TGBFPlugin):
                     continue
                 else:
                     self.log.info(f"User {full_name} with ID {to_user_id} is eligible")
+
+                    # Add eligible user
+                    address = (await self.get_wallet(to_user_id)).public_key
+                    addresses.append(address)
+
+                    msg += html.escape(to_username) + suffix
+
+                    # Increment eligible user counter
+                    eligible_users += 1
+
+                    # Check if we've reached the limit
+                    if eligible_users >= user_limit:
+                        self.log.warning(f"User limit of {user_limit} hit")
+                        break
             except Exception as e:
                 self.log.error(f"Can't retrieve user info for user ID {to_user_id}: {e}")
                 continue
-
-            address = (await self.get_wallet(to_user_id)).public_key
-
-            # Add address to list of addresses to rain on
-            addresses.append(address)
-            # Add username to output message
-            msg += html.escape(to_username) + suffix
 
         if not addresses:
             msg = f"{con.ERROR} No users found with XIAN.ORG in name"
@@ -198,7 +196,7 @@ class Bless(TGBFPlugin):
         if amount_single.is_integer():
             amount_single = int(amount_single)
 
-        msg = f"Blessed each user with <code>{amount_single}</code> {ticker}:\n{msg}"
+        msg = f"Blessed {len(addresses)} users with <code>{amount_single}</code> {ticker}:\n{msg}"
 
         # Remove last suffix
         msg = msg[:-len(suffix)]
