@@ -13,8 +13,16 @@ from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
 class Lottery(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.lottery_callback, block=False))
-        await self.add_handler(CallbackQueryHandler(self.lottery_action_callback, block=False))
+        await self.add_handler(CommandHandler(
+            self.handle,
+            self.lottery_callback,
+            block=False)
+        )
+        await self.add_handler(CallbackQueryHandler(
+            self.lottery_action_callback,
+            pattern=f"^{self.name}_",
+            block=False)
+        )
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()

@@ -10,8 +10,16 @@ from telegram.error import BadRequest
 class All(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.all_callback, block=False))
-        await self.add_handler(CallbackQueryHandler(self.send_callback, block=False))
+        await self.add_handler(CommandHandler(
+            self.handle,
+            self.all_callback,
+            block=False)
+        )
+        await self.add_handler(CallbackQueryHandler(
+            self.send_callback,
+            pattern=f"^{self.name}_",
+            block=False)
+        )
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)

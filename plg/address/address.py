@@ -13,9 +13,21 @@ from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
 class Address(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.address_callback, block=False))
-        await self.add_handler(CommandHandler('deposit', self.address_callback, block=False))
-        await self.add_handler(CallbackQueryHandler(self.privkey_callback, block=False))
+        await self.add_handler(CommandHandler(
+            self.handle,
+            self.address_callback,
+            block=False)
+        )
+        await self.add_handler(CommandHandler(
+            'deposit',
+            self.address_callback,
+            block=False)
+        )
+        await self.add_handler(CallbackQueryHandler(
+            self.privkey_callback,
+            pattern=f"^{self.name}_",
+            block=False)
+        )
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()

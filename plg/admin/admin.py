@@ -8,7 +8,11 @@ from telegram.ext import CallbackContext, CommandHandler
 class Admin(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.admin_callback, block=False))
+        await self.add_handler(CommandHandler(
+            self.handle,
+            self.admin_callback,
+            block=False)
+        )
 
     @TGBFPlugin.owner(hidden=True)
     @TGBFPlugin.private(hidden=True)
