@@ -38,7 +38,7 @@ class Buybot(TGBFPlugin):
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
-    @TGBFPlugin.owner()  # Restrict to bot owner
+    @TGBFPlugin.owner()
     async def buybot_callback(self, update: Update, context: CallbackContext):
         """Handle buybot command to manage settings"""
         if not update.message:
@@ -64,30 +64,65 @@ class Buybot(TGBFPlugin):
         chat_id = update.effective_chat.id
         thread_id = update.message.message_thread_id
 
-        # Create a chat entry that includes both chat_id and thread_id if in a topic
-        chat_entry = {"chat_id": chat_id, "thread_id": thread_id} if thread_id else chat_id
-
         if subcommand == 'start':
+            # Parse optional minimum value
+            min_value = None
+            if len(context.args) > 1:
+                try:
+                    min_value = float(context.args[1])
+                    if min_value <= 0:
+                        await update.message.reply_text(f"{con.ERROR} Minimum value must be greater than 0")
+                        return
+                except ValueError:
+                    await update.message.reply_text(f"{con.ERROR} Invalid minimum value. Please provide a number.")
+                    return
+
+            # Create a chat entry that includes chat_id, thread_id (if in topic), and min_value (if specified)
+            chat_entry = {"chat_id": chat_id}
+            if thread_id:
+                chat_entry["thread_id"] = thread_id
+            if min_value is not None:
+                chat_entry["min_value"] = min_value
+
+            # If no special attributes, just use chat_id for backward compatibility
+            if not thread_id and min_value is None:
+                chat_entry = chat_id
+
             # Check if chat is already in the watched chats
             is_watched = False
-            for existing_entry in self.watched_chats:
+            existing_index = -1
+            for i, existing_entry in enumerate(self.watched_chats):
                 if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
                     if existing_entry.get("thread_id") == thread_id:
                         is_watched = True
+                        existing_index = i
                         break
                 elif existing_entry == chat_id and not thread_id:
                     is_watched = True
+                    existing_index = i
                     break
 
-            # Add current chat/thread to watched chats
+            # Add or update current chat/thread in watched chats
             if not is_watched:
                 self.watched_chats.append(chat_entry)
+                min_text = f" (min: {min_value} XIAN)" if min_value else ""
                 await update.message.reply_text(f"{con.DONE} Buy-bot started in this " +
-                                                ("topic" if thread_id else "chat"))
+                                                ("topic" if thread_id else "chat") + min_text)
                 self.cfg.set(self.watched_chats, "watched_chats")
             else:
-                await update.message.reply_text(f"{con.INFO} Buy-bot already active in this " +
-                                                ("topic" if thread_id else "chat"))
+                # Update existing entry with new min_value if provided
+                if min_value is not None:
+                    if isinstance(self.watched_chats[existing_index], dict):
+                        self.watched_chats[existing_index]["min_value"] = min_value
+                    else:
+                        # Convert simple chat_id to dict format
+                        self.watched_chats[existing_index] = {"chat_id": chat_id, "min_value": min_value}
+                    self.cfg.set(self.watched_chats, "watched_chats")
+                    await update.message.reply_text(f"{con.DONE} Updated minimum value to {min_value} XIAN for this " +
+                                                    ("topic" if thread_id else "chat"))
+                else:
+                    await update.message.reply_text(f"{con.INFO} Buy-bot already active in this " +
+                                                    ("topic" if thread_id else "chat"))
 
         elif subcommand == 'stop':
             # Find and remove the current chat/thread from watched chats
@@ -111,13 +146,67 @@ class Buybot(TGBFPlugin):
                 await update.message.reply_text(f"{con.INFO} Buy-bot not active in this " +
                                                 ("topic" if thread_id else "chat"))
 
+        elif subcommand == 'setmin' and len(context.args) > 1:
+            # Set minimum value for current chat/thread
+            try:
+                min_value = float(context.args[1])
+                if min_value <= 0:
+                    await update.message.reply_text(f"{con.ERROR} Minimum value must be greater than 0")
+                    return
+            except ValueError:
+                await update.message.reply_text(f"{con.ERROR} Invalid minimum value. Please provide a number.")
+                return
+
+            # Find and update the current chat/thread
+            updated = False
+            for i, existing_entry in enumerate(self.watched_chats):
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        self.watched_chats[i]["min_value"] = min_value
+                        updated = True
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    # Convert simple chat_id to dict format
+                    self.watched_chats[i] = {"chat_id": chat_id, "min_value": min_value}
+                    updated = True
+                    break
+
+            if updated:
+                self.cfg.set(self.watched_chats, "watched_chats")
+                await update.message.reply_text(f"{con.DONE} Set minimum value to {min_value} XIAN for this " +
+                                                ("topic" if thread_id else "chat"))
+            else:
+                await update.message.reply_text(f"{con.ERROR} Buy-bot not active in this " +
+                                                ("topic" if thread_id else "chat") + ". Use 'start' first.")
+
+        elif subcommand == 'getmin':
+            # Get minimum value for current chat/thread
+            min_value = None
+            for existing_entry in self.watched_chats:
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        min_value = existing_entry.get("min_value")
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    min_value = None  # Old format doesn't have min_value
+                    break
+
+            if min_value is not None:
+                await update.message.reply_text(f"Minimum value for this " +
+                                                ("topic" if thread_id else "chat") + f": {min_value} XIAN")
+            else:
+                await update.message.reply_text(f"No minimum value set for this " +
+                                                ("topic" if thread_id else "chat"))
+
         elif subcommand == 'status':
             # Check if this chat/thread is being watched
             is_active = False
+            min_value = None
             for existing_entry in self.watched_chats:
                 if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
                     if existing_entry.get("thread_id") == thread_id:
                         is_active = True
+                        min_value = existing_entry.get("min_value")
                         break
                 elif existing_entry == chat_id and not thread_id:
                     is_active = True
@@ -126,10 +215,11 @@ class Buybot(TGBFPlugin):
             status = f"{con.GREEN} Active" if is_active else f"{con.RED} Inactive"
             contracts = ", ".join(self.watched_contracts)
             functions = ", ".join(f for f in self.watched_functions)
+            min_text = f"\nMinimum Value: {min_value} XIAN" if min_value is not None else "\nMinimum Value: Not set"
 
             msg = (
                 f"<b>Buy-Bot Status</b>\n\n"
-                f"Status: {status}\n"
+                f"Status: {status}{min_text}\n"
                 f"Watched Contracts: <code>{contracts}</code>\n"
                 f"Watched Functions: <code>{functions}</code>\n"
                 f"Total Active Chats: {len(self.watched_chats)}"
@@ -559,6 +649,14 @@ class Buybot(TGBFPlugin):
                 amount_in_float = 0
                 amount_out_float = 0
 
+            # Determine the XIAN amount for minimum value checking
+            if pair_id == 1:  # XIAN-XUSDC pair
+                # For XIAN buys, check the XIAN amount being bought (amount_out)
+                xian_amount = amount_out_float
+            else:
+                # For other pairs buying with XIAN, check the XIAN amount being spent (amount_in)
+                xian_amount = amount_in_float
+
             # Get buyer address
             buyer_address = arguments.get("to", "Unknown")
             short_address = buyer_address[:6] + "..." + buyer_address[-4:] if len(buyer_address) > 10 else buyer_address
@@ -610,12 +708,20 @@ class Buybot(TGBFPlugin):
                     # Check if this is a chat_id or a dict with chat_id and thread_id
                     chat_id = None
                     thread_id = None
+                    min_value = None
 
                     if isinstance(chat_entry, dict):
                         chat_id = chat_entry.get("chat_id")
                         thread_id = chat_entry.get("thread_id")
+                        min_value = chat_entry.get("min_value")
                     else:
                         chat_id = chat_entry
+
+                    # Check minimum value threshold
+                    if min_value is not None and xian_amount < min_value:
+                        self.log.info(
+                            f"Skipping notification for chat {chat_id} - trade amount {xian_amount} XIAN below minimum {min_value} XIAN")
+                        continue
 
                     # Send message with thread_id if available
                     await self.tgb.bot.updater.bot.send_message(
@@ -633,19 +739,3 @@ class Buybot(TGBFPlugin):
         except Exception as e:
             self.log.error(f'Error sending DEX notification: {e}')
             await self.notify(e)
-
-    async def get_token_for_pair(self, pair_id, is_source=True):
-        """Placeholder method to get token contract for a pair ID"""
-        pairs = {
-            1: ("con_usdc", "currency"),  # token0, token1
-            2: ("con_poop_coin", "currency"),
-            # Add more known pairs as needed
-        }
-
-        if pair_id in pairs:
-            if is_source:
-                return pairs[pair_id][0]
-            else:
-                return pairs[pair_id][1]
-
-        return "Unknown"

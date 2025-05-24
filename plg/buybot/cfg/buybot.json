@@ -4,7 +4,8 @@
     "watched_chats": [
         {
             "chat_id": -1001154540877,
-            "thread_id": 5946
+            "thread_id": 5946,
+            "min_value": 10.0
         }
     ],
     "watched_contracts": [
