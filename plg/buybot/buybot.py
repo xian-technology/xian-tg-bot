@@ -669,8 +669,8 @@ class Buybot(TGBFPlugin):
                 count = base + int(math.log10(max(1, amount)) * multiplier)
                 return max(min_count, min(max_count, count))
 
-            # Dynamic emoji count based on amount
-            emoji_count = calculate_emoji_count(amount_out_float if token_symbol == "XIAN" else amount_in_float)
+            # Dynamic emoji count based on XIAN amount (consistent across all pairs)
+            emoji_count = calculate_emoji_count(xian_amount)
             emoji_line = "🟢" * emoji_count
 
             # Format buy message
