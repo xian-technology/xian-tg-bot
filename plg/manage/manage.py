@@ -3,6 +3,7 @@ import constants as con
 from plugin import TGBFPlugin
 from telegram import Update, Chat
 from telegram.ext import CallbackContext, MessageHandler, filters
+from telegram.error import ChatMigrated
 
 
 class Manage(TGBFPlugin):
@@ -26,9 +27,30 @@ class Manage(TGBFPlugin):
         chat_id = update.effective_chat.id
         user_id = update.effective_user.id
 
-        # If admin posts a message, then we can ignore it
-        chat_member = await context.bot.get_chat_member(chat_id, user_id)
-        if chat_member.status in ['administrator', 'creator']:
+        try:
+            # If admin posts a message, then we can ignore it
+            chat_member = await context.bot.get_chat_member(chat_id, user_id)
+            if chat_member.status in ['administrator', 'creator']:
+                return
+
+        except ChatMigrated as e:
+            # Handle group migration to supergroup
+            new_chat_id = e.new_chat_id
+            self.log.info(f"Chat migrated from {chat_id} to {new_chat_id}")
+
+            # Use the new chat ID for the API call
+            try:
+                chat_member = await context.bot.get_chat_member(new_chat_id, user_id)
+                if chat_member.status in ['administrator', 'creator']:
+                    return
+            except Exception as inner_e:
+                self.log.error(f'Error getting chat member with new chat ID: {inner_e}')
+                await self.notify(f"Chat migration handled but error occurred: {inner_e}")
+                return
+
+        except Exception as e:
+            self.log.error(f'Error getting chat member: {e}')
+            await self.notify(e)
             return
 
         try:
