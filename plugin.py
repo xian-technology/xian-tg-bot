@@ -17,7 +17,7 @@ from xian_py.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
 from typing import Tuple, Dict, Callable, Any, BinaryIO
-from telegram.ext import CallbackContext, BaseHandler, Job
+from telegram.ext import CallbackContext, BaseHandler, Job, CallbackQueryHandler
 from datetime import datetime, timedelta
 from config import ConfigManager
 from main import TelegramBot
@@ -133,12 +133,16 @@ class TGBFPlugin:
         """ Will add bot handlers to this plugins list of handlers
          and also add them to the bot dispatcher """
 
-        group = group if group else utl.md5(self.name, to_int=True)
+        if group is None:
+            if isinstance(handler, CallbackQueryHandler) and handler.pattern:
+                group = 0
+            else:
+                group = abs(hash(self.name)) % 1000 + 1
 
         self.tgb.bot.add_handler(handler, group)
         self.handlers[group] = handler
 
-        self.log.info(f"Plugin '{self.name}': {type(handler).__name__} added")
+        self.log.info(f"Plugin '{self.name}': {type(handler).__name__} added to group {group}")
 
     async def remove_handler(self, handler: BaseHandler):
         """ Removed the given handler from the bot """
