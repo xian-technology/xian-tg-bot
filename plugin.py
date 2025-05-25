@@ -1,9 +1,9 @@
 import os
-import sqlite3
 import inspect
 import asyncio
 import aiohttp
 import pickledb
+import aiosqlite
 
 import constants as c
 import utils as utl
@@ -453,28 +453,21 @@ class TGBFPlugin:
         try:
             # Create directory if it doesn't exist
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+            async with aiosqlite.connect(db_path, timeout=5) as con:
+                cur = await con.cursor()
+                await cur.execute(sql, args)
+                await con.commit()
+
+                res["data"] = await cur.fetchall()
+                res["success"] = True
         except Exception as e:
             res["data"] = str(e)
             res["success"] = False
             self.log.error(e)
             await self.notify(e)
 
-        with sqlite3.connect(db_path, timeout=5) as con:
-            try:
-                cur = con.cursor()
-                cur.execute(sql, args)
-                con.commit()
-
-                res["data"] = cur.fetchall()
-                res["success"] = True
-
-            except Exception as e:
-                res["data"] = str(e)
-                res["success"] = False
-                self.log.error(e)
-                await self.notify(e)
-
-            return res
+        return res
 
     async def table_exists_global(self, table_name, db_name="") -> bool:
         """ Return TRUE if given table exists in global database, otherwise FALSE """
@@ -511,20 +504,20 @@ class TGBFPlugin:
         if not db_path.is_file():
             return False
 
-        con = sqlite3.connect(db_path)
-        cur = con.cursor()
         exists = False
-
         statement = await self.get_resource_global("table_exists.sql")
 
         try:
-            if cur.execute(statement, [table_name]).fetchone():
-                exists = True
+            async with aiosqlite.connect(db_path) as con:
+                cur = await con.cursor()
+                await cur.execute(statement, [table_name])
+                result = await cur.fetchone()
+                if result:
+                    exists = True
         except Exception as e:
             self.log.error(e)
             await self.notify(e)
 
-        con.close()
         return exists
 
     def get_res_path(self, plugin=None) -> Path:
