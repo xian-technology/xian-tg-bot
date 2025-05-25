@@ -11,8 +11,22 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 class Buy(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler(self.handle, self.buy_callback, block=False))
-        await self.add_handler(CallbackQueryHandler(self.confirm_callback, block=False))
+        await self.add_handler(CommandHandler(
+            self.handle,
+            self.buy_callback,
+            block=False)
+        )
+
+        await self.add_handler(CallbackQueryHandler(
+            self.confirm_buy_callback,
+            pattern=f"^{self.name}_",
+            block=False)
+        )
+
+        # Create table if it doesn’t exist
+        if not await self.table_exists("buy_transactions"):
+            sql = await self.get_resource("create_buy.sql")
+            await self.exec_sql(sql)
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
@@ -65,16 +79,11 @@ class Buy(TGBFPlugin):
         buy_list = list()
         sell_list = list()
 
-        buy_decimals = 0
-        sell_decimals = 0
-
         for token in tokens:
             if token[2] == buy_symbol:
                 buy_list.append(token[1])
-                buy_decimals = token[3]
             if token[2] == sell_symbol:
                 sell_list.append(token[1])
-                sell_decimals = token[3]
 
         # Check if tokens are known
         if len(sell_list) == 0:
@@ -108,41 +117,47 @@ class Buy(TGBFPlugin):
 
         id = utl.id()
 
-        self.kv_set(f"{id}_user", user_id)
-        self.kv_set(f"{id}_buy_con", buy_contract)
-        self.kv_set(f"{id}_buy_sym", buy_symbol)
-        self.kv_set(f"{id}_buy_dec", buy_decimals)
-        self.kv_set(f"{id}_sell_con", sell_contract)
-        self.kv_set(f"{id}_sell_sym", sell_symbol)
-        self.kv_set(f"{id}_sell_dec", sell_decimals)
-        self.kv_set(f"{id}_amount", amount)
+        # Store transaction data in SQLite
+        await self.exec_sql(
+            await self.get_resource("insert_buy.sql"),
+            id, user_id, buy_contract, buy_symbol, sell_contract, sell_symbol, amount
+        )
 
         await message.edit_text(
             f"{con.MONEY} Buy {amount} {buy_symbol} for {sell_symbol}",
-            reply_markup = self.confirm_button(id))
+            reply_markup = self.confirm_buy_button(id))
 
-    def confirm_button(self, id: int):
+    def confirm_buy_button(self, id: int):
         menu = utl.build_menu(
             [InlineKeyboardButton(
-                f"{con.DONE} Confirm buying",
+                f"{con.DONE} Confirm BUY",
                 callback_data=f'{self.name}_{id}'
             )], 1
         )
         return InlineKeyboardMarkup(menu)
 
-    async def confirm_callback(self, update: Update, context: CallbackContext):
+    async def confirm_buy_callback(self, update: Update, context: CallbackContext):
+        self.log.debug(f'Data - update.callback_query.data: {update.callback_query.data}')
         if not update.callback_query.data.startswith(self.name):
             return
 
         callback_data = update.callback_query.data.split('_')
         id = callback_data[1]
 
-        user_id = self.kv_get(f"{id}_user")
-        buy_contract = self.kv_get(f"{id}_buy_con")
-        sell_contract = self.kv_get(f"{id}_sell_con")
-        buy_symbol = self.kv_get(f"{id}_buy_sym")
-        sell_symbol = self.kv_get(f"{id}_sell_sym")
-        amount = self.kv_get(f"{id}_amount")
+        # Retrieve transaction data from DB
+        select_sql = await self.get_resource('select_buy.sql')
+        res = await self.exec_sql(select_sql, id)
+        if not res["success"] or not res["data"]:
+            await update.effective_message.edit_text(f"{con.ERROR} Transaction data not found")
+            return
+
+        row = res["data"][0]
+        user_id = row[1]
+        buy_contract = row[2]
+        buy_symbol = row[3]
+        sell_contract = row[4]
+        sell_symbol = row[5]
+        amount = row[6]
 
         if update.effective_user.id != user_id:
             return
@@ -153,6 +168,10 @@ class Buy(TGBFPlugin):
         contract = self.cfg.get('contract')
 
         message = update.effective_message
+
+        event_plugin = self.plugins['event']
+        if not event_plugin.is_node_connected():
+            await event_plugin.force_reconnect()
 
         try:
             approved_amount = xian.get_approved_amount(contract, token=sell_contract)
@@ -179,7 +198,7 @@ class Buy(TGBFPlugin):
 
             if approve['success']:
                 try:
-                    success, result = await self.plugins['event'].track_tx(
+                    success, result = await event_plugin.track_tx(
                         tx_hash,
                         wait=True
                     )
@@ -236,12 +255,15 @@ class Buy(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.ERROR} {result}")
 
-            await self.plugins['event'].track_tx(tx_hash, tx_result)
+            await event_plugin.track_tx(tx_hash, tx_result)
         else:
             await message.edit_text(f"{con.ERROR} {buy['message']}")
 
         # Remove all keys with ID as prefix
         self.kv_del(id, is_prefix=True)
+
+        if amount.is_integer:
+            amount = int(amount)
 
         await context.bot.answer_callback_query(
             update.callback_query.id,
