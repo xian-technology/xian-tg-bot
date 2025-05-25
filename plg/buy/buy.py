@@ -43,7 +43,7 @@ class Buy(TGBFPlugin):
 
         user_id = update.message.from_user.id
 
-        pair = context.args[0]
+        pair_or_ticker = context.args[0]
         amount = context.args[1]
 
         message = await update.message.reply_text(f"{con.WAIT} Preparing ...")
@@ -62,11 +62,23 @@ class Buy(TGBFPlugin):
         if amount.is_integer():
             amount = int(amount)
 
-        if "-" not in pair:
-            await message.edit_text(
-                f"{con.ERROR} Pair not valid. "
-                f"Please use the format <code>[ticker#1]-[ticker#2]</code>")
-            return
+        # Handle single ticker vs pair format
+        if "-" not in pair_or_ticker:
+            # Single ticker provided, construct pair
+            ticker = pair_or_ticker.upper()
+            if ticker == "XIAN":
+                pair = "xian-xusdc"  # XIAN is traded against USDC
+            else:
+                pair = f"{ticker.lower()}-xian"  # Other tokens are traded against XIAN
+        else:
+            # Pair format provided, use as-is
+            pair = pair_or_ticker
+            # Validate pair format
+            if pair.count('-') != 1:
+                await message.edit_text(
+                    f"{con.ERROR} Pair not valid. "
+                    f"Please use the format <code>[ticker#1]-[ticker#2]</code> or just <code>[ticker]</code>")
+                return
 
         # Split pair into tickers
         buy_symbol, sell_symbol = pair.split('-')
@@ -80,9 +92,9 @@ class Buy(TGBFPlugin):
         sell_list = list()
 
         for token in tokens:
-            if token[2] == buy_symbol:
+            if token[2].upper() == buy_symbol:
                 buy_list.append(token[1])
-            if token[2] == sell_symbol:
+            if token[2].upper() == sell_symbol:
                 sell_list.append(token[1])
 
         # Check if tokens are known
@@ -94,7 +106,7 @@ class Buy(TGBFPlugin):
             return
         if len(buy_list) == 0:
             await message.edit_text(
-                f"{con.ERROR} No token contract found for <code>{sell_symbol.upper()}</code>. "
+                f"{con.ERROR} No token contract found for <code>{buy_symbol.upper()}</code>. "
                 f"Please adjust your token list with /tokens"
             )
             return
@@ -125,7 +137,7 @@ class Buy(TGBFPlugin):
 
         await message.edit_text(
             f"{con.MONEY} Buy {amount} {buy_symbol} for {sell_symbol}",
-            reply_markup = self.confirm_buy_button(id))
+            reply_markup=self.confirm_buy_button(id))
 
     def confirm_buy_button(self, id: int):
         menu = utl.build_menu(
@@ -258,9 +270,6 @@ class Buy(TGBFPlugin):
             await event_plugin.track_tx(tx_hash, tx_result)
         else:
             await message.edit_text(f"{con.ERROR} {buy['message']}")
-
-        # Remove all keys with ID as prefix
-        self.kv_del(id, is_prefix=True)
 
         if amount.is_integer:
             amount = int(amount)
