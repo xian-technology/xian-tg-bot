@@ -26,6 +26,8 @@ class Lottery(TGBFPlugin):
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
+    @TGBFPlugin.logging()
+    @TGBFPlugin.send_typing()
     async def lottery_callback(self, update: Update, context: CallbackContext):
         # Don't deal with edited messages
         if not update.message:
@@ -42,25 +44,47 @@ class Lottery(TGBFPlugin):
         xian = await self.get_xian(wallet=wallet)
 
         lottery_contract = self.cfg.get("contract")
-
         lottery_id = update.message.id
         token_contract = ""
         amount = 0
 
-        # Contract and amount provided
+        # Contract/ticker and amount provided
         if len(context.args) == 2:
-            token_contract = context.args[0]
+            token_or_contract = context.args[0]
             amount = context.args[1]
+
+            # Check if it's a contract (starts with 'con_' or is 'currency')
+            if token_or_contract == 'currency' or token_or_contract.startswith('con_'):
+                token_contract = token_or_contract
+            else:
+                # It's a ticker, need to find the contract
+                ticker = token_or_contract.upper()
+                tokens = await self.get_plugin('tokens').get_tokens(user_id)
+
+                # Find contract for this ticker
+                found_contract = None
+                for token in tokens:
+                    if token[2].upper() == ticker:
+                        found_contract = token[1]
+                        break
+
+                if not found_contract:
+                    await update.message.reply_text(
+                        f"{con.ERROR} No token contract found for ticker <code>{ticker}</code>. "
+                        f"Please adjust your token list with /tokens"
+                    )
+                    return
+
+                token_contract = found_contract
 
         # Only amount provided
         elif len(context.args) == 1:
             token_contract = 'currency'
             amount = context.args[0]
 
-        # Validate contract
+        # Validate contract (should always be valid now)
         if token_contract != 'currency' and not token_contract.startswith('con_'):
-            await context.bot.send_message(
-                update.message.chat_id,
+            await update.message.reply_text(
                 f"{con.ERROR} Contract needs to be 'currency' or start with 'con_'"
             )
             return
@@ -75,8 +99,7 @@ class Lottery(TGBFPlugin):
             if amount.is_integer():
                 amount = int(amount)
         except Exception as e:
-            await context.bot.send_message(
-                update.message.chat_id,
+            await update.message.reply_text(
                 f"{con.ERROR} {e}"
             )
             return
@@ -92,10 +115,7 @@ class Lottery(TGBFPlugin):
             msg = f"GET APPROVED AMOUNT Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            await context.bot.send_message(
-                update.message.chat_id,
-                f"{con.ERROR} {e}"
-            )
+            await update.message.reply_text(f"{con.ERROR} {e}")
             return
 
         if approved_amount < amount:
@@ -106,10 +126,7 @@ class Lottery(TGBFPlugin):
                 msg = f"APPROVE Error: {e}"
                 self.log.error(msg)
                 await self.notify(msg)
-                await context.bot.send_message(
-                    update.message.chat_id,
-                    f"{con.ERROR} {e}"
-                )
+                await update.message.reply_text(f"{con.ERROR} {e}")
                 return
 
             tx_hash = approve['tx_hash']
@@ -121,19 +138,13 @@ class Lottery(TGBFPlugin):
                         wait=True
                     )
                     if not success:
-                        await context.bot.send_message(
-                            update.message.chat_id,
-                            f"{con.ERROR} Approval failed: {result}")
+                        await update.message.reply_text(f"{con.ERROR} Approval failed: {result}")
                         return
                 except asyncio.TimeoutError:
-                    await context.bot.send_message(
-                        update.message.chat_id,
-                        f"{con.ERROR} Approval transaction timeout")
+                    await update.message.reply_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await context.bot.send_message(
-                    update.message.chat_id,
-                    f"{con.ERROR} {approve['message']}")
+                await update.message.reply_text(f"{con.ERROR} {approve['message']}")
                 return
 
         kwargs = {
@@ -150,10 +161,7 @@ class Lottery(TGBFPlugin):
             msg = f"Lottery Start Error: {e}"
             self.log.error(msg)
             await self.notify(msg)
-            await context.bot.send_message(
-                update.message.chat_id,
-                f"{con.ERROR} {e}"
-            )
+            await update.message.reply_text(f"{con.ERROR} {e}")
             return
 
         tx_hash = send['tx_hash']
@@ -194,19 +202,13 @@ class Lottery(TGBFPlugin):
                     reply_markup=self.lottery_buttons(lottery_id)
                 )
             else:
-                await context.bot.send_message(
-                    update.message.chat_id,
-                    f"{con.ERROR} {result}"
-                )
+                await update.message.reply_text(f"{con.ERROR} {result}")
                 return
 
         if send['success']:
             await event_plugin.track_tx(tx_hash, tx_result)
         else:
-            await context.bot.send_message(
-                update.message.chat_id,
-                f"{con.ERROR} {send['message']}"
-            )
+            await update.message.reply_text(f"{con.ERROR} {send['message']}")
             return
 
     def lottery_buttons(self, lottery_id: int):
