@@ -1,10 +1,14 @@
 {
     "category": "Xian",
     "description": "Display DEX candlestick charts",
-    "whitelist": [
-        {"group": -1002119335225, "thread": 4615},
-        {"group": -1002526921906},
-        {"group": -1001719798092}
+    "blacklist": [
+        {"group": -1002119335225, "thread": null},
+        {"group": -1002119335225, "thread": 4614},
+        {"group": -1002119335225, "thread": 5172},
+        {"group": -1002119335225, "thread": 4611},
+        {"group": -1002119335225, "thread": 50098},
+        {"group": -1002119335225, "thread": 37254},
+        {"group": -1002119335225, "thread": 50241}
     ],
-    "whitelist_msg": "This command can only be used in the topic 'Bot Spam'"
+    "blacklist_msg": "This command can only be used in the topic 'Bot Spam'"
 }
