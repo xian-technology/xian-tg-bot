@@ -766,7 +766,8 @@ class TGBFPlugin:
                     elif not hidden:
                         name = context.bot.username or context.bot.name
                         msg = self.cfg.get("blacklist_msg").replace("{{name}}", name)
-                        await update.message.reply_text(msg, disable_web_page_preview=True)
+                        reply = await update.message.reply_text(msg, disable_web_page_preview=True)
+                        await self.remove_msg_after(update.message, reply, after_secs=5)
                 except:
                     pass
 
@@ -806,7 +807,8 @@ class TGBFPlugin:
                     elif not hidden:
                         name = context.bot.username or context.bot.name
                         msg = self.cfg.get("whitelist_msg").replace("{{name}}", name)
-                        await update.message.reply_text(msg, disable_web_page_preview=True)
+                        reply = await update.message.reply_text(msg, disable_web_page_preview=True)
+                        await self.remove_msg_after(update.message, reply, after_secs=5)
                 except:
                     pass
 
