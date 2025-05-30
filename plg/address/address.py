@@ -25,7 +25,7 @@ class Address(TGBFPlugin):
         )
         await self.add_handler(CallbackQueryHandler(
             self.privkey_callback,
-            pattern=f"^{self.name}_",
+            pattern=f"^{self.name}",
             block=False)
         )
 
