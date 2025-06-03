@@ -260,9 +260,11 @@ class Buy(TGBFPlugin):
                     bought = utl.format_float(bought)
 
                     await message.edit_text(
-                        f"→ Bought <code>{bought}</code> {buy_symbol}\n"
-                        f"← Sold <code>{sold}</code> {sell_symbol}\n"
-                        f"$ Price <code>{price}</code>\n{link}",
+                        f"<code>"
+                        f"→ Bought {bought} {buy_symbol}\n"
+                        f"← Sold {sold} {sell_symbol}\n"
+                        f"$ Price {price}"
+                        f"</code>\n{link}",
                         disable_web_page_preview=True
                     )
                 else:
