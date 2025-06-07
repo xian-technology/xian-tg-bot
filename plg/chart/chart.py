@@ -514,8 +514,10 @@ class Chart(TGBFPlugin):
             candles = self.process_swap_events(events, interval_minutes, limit, base_is_token0)
 
             if not candles:
+                timeframe_str = context.args[1] if len(context.args) > 1 else '72h'
                 await update.message.reply_text(
-                    f"{con.ERROR} Could not generate candlesticks for {base_symbol}-{quote_symbol}")
+                    f"{con.INFO} No trades found for {base_symbol}-{quote_symbol} "
+                    f"in the last {timeframe_str}")
                 return
 
             # Create DataFrame for Plotly
