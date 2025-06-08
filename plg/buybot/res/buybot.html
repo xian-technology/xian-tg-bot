@@ -1,4 +1,4 @@
-<code>Monitor DEX transactions and display real-time swap notifications</code>
+<b>Monitor DEX transactions and display real-time swap notifications</b>
 
 ◾️ Start monitoring DEX buy transactions in this chat/topic. Optional: Set minimum XIAN value to filter trades
 <code>{{handle}} start [min_value]</code>
@@ -15,6 +15,18 @@
 ◾️ Show current minimum value setting
 <code>{{handle}} getmin</code>
 
+◾️ Add token to filter (only show buys for specific tokens)
+<code>{{handle}} addtoken &lt;SYMBOL&gt;</code>
+
+◾️ Remove token from filter
+<code>{{handle}} removetoken &lt;SYMBOL&gt;</code>
+
+◾️ List currently allowed tokens for this chat/topic
+<code>{{handle}} listtokens</code>
+
+◾️ Remove all token filtering (show all token buys)
+<code>{{handle}} clearfilter</code>
+
 ◾️ Add contract to watch list
 <code>{{handle}} add contract &lt;address&gt;</code>
 
@@ -27,12 +39,20 @@
 ◾️ Remove function from watch list
 <code>{{handle}} remove function &lt;name&gt;</code>
 
-<code>Examples:</code>
+<b>Examples:</b>
 <code>{{handle}} start</code> - Start with no minimum
 <code>{{handle}} start 100</code> - Start with 100 XIAN minimum
 <code>{{handle}} setmin 50</code> - Set 50 XIAN minimum
-<code>{{handle}} getmin</code> - Check current minimum
+<code>{{handle}} addtoken SSS</code> - Only show SSS token buys
+<code>{{handle}} addtoken POOP</code> - Also show POOP token buys
+<code>{{handle}} listtokens</code> - See allowed tokens (SSS, POOP)
+<code>{{handle}} clearfilter</code> - Show all token buys again
 
 <b>Note:</b> Minimum values filter trades based on XIAN amounts:
 • For XIAN buys (XUSDC→XIAN): Filters by XIAN received
 • For token buys (XIAN→Token): Filters by XIAN spent
+
+<b>Token Filtering:</b> Each chat/topic can filter to specific tokens:
+• No filter: Shows all token buys (default)
+• With filter: Only shows buys for specified tokens
+• Multiple tokens: Add multiple tokens to see buys for any of them

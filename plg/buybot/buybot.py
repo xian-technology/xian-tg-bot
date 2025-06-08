@@ -270,6 +270,104 @@ class Buybot(TGBFPlugin):
                     await update.message.reply_text(f"{con.INFO} Function {function} not in watchlist")
             else:
                 await update.message.reply_text(await self.get_info())
+
+        elif subcommand == 'addtoken' and len(context.args) > 1:
+            # Add token filter for current chat/thread
+            token_symbol = context.args[1].upper()
+
+            # Find and update the current chat/thread
+            updated = False
+            for i, existing_entry in enumerate(self.watched_chats):
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        # Add to existing token list or create new one
+                        if "allowed_tokens" not in self.watched_chats[i]:
+                            self.watched_chats[i]["allowed_tokens"] = []
+                        if token_symbol not in self.watched_chats[i]["allowed_tokens"]:
+                            self.watched_chats[i]["allowed_tokens"].append(token_symbol)
+                            updated = True
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    # Convert simple chat_id to dict format and add token filter
+                    self.watched_chats[i] = {
+                        "chat_id": chat_id,
+                        "allowed_tokens": [token_symbol]
+                    }
+                    updated = True
+                    break
+
+            if updated:
+                self.cfg.set(self.watched_chats, "watched_chats")
+                await update.message.reply_text(f"{con.DONE} Added {token_symbol} to allowed tokens for this " +
+                                                ("topic" if thread_id else "chat"))
+            else:
+                await update.message.reply_text(f"{con.ERROR} Buy-bot not active in this " +
+                                                ("topic" if thread_id else "chat") + ". Use 'start' first.")
+
+        elif subcommand == 'removetoken' and len(context.args) > 1:
+            # Remove token filter for current chat/thread
+            token_symbol = context.args[1].upper()
+
+            # Find and update the current chat/thread
+            updated = False
+            for i, existing_entry in enumerate(self.watched_chats):
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        allowed_tokens = self.watched_chats[i].get("allowed_tokens", [])
+                        if token_symbol in allowed_tokens:
+                            allowed_tokens.remove(token_symbol)
+                            updated = True
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    # No token filtering on simple chat_id entries
+                    pass
+
+            if updated:
+                self.cfg.set(self.watched_chats, "watched_chats")
+                await update.message.reply_text(f"{con.DONE} Removed {token_symbol} from allowed tokens for this " +
+                                                ("topic" if thread_id else "chat"))
+            else:
+                await update.message.reply_text(f"{con.INFO} {token_symbol} was not in the allowed tokens list")
+
+        elif subcommand == 'listtokens':
+            # List allowed tokens for current chat/thread
+            allowed_tokens = None
+            for existing_entry in self.watched_chats:
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        allowed_tokens = existing_entry.get("allowed_tokens")
+                        break
+                elif existing_entry == chat_id and not thread_id:
+                    allowed_tokens = None  # No filtering
+                    break
+
+            if allowed_tokens:
+                token_list = ", ".join(allowed_tokens)
+                await update.message.reply_text(f"Allowed tokens for this " +
+                                                ("topic" if thread_id else "chat") + f": {token_list}")
+            else:
+                await update.message.reply_text(f"No token filtering active - showing all tokens for this " +
+                                                ("topic" if thread_id else "chat"))
+
+        elif subcommand == 'clearfilter':
+            # Remove all token filtering for current chat/thread
+            updated = False
+            for i, existing_entry in enumerate(self.watched_chats):
+                if isinstance(existing_entry, dict) and existing_entry.get("chat_id") == chat_id:
+                    if existing_entry.get("thread_id") == thread_id:
+                        if "allowed_tokens" in self.watched_chats[i]:
+                            del self.watched_chats[i]["allowed_tokens"]
+                            updated = True
+                        break
+
+            if updated:
+                self.cfg.set(self.watched_chats, "watched_chats")
+                await update.message.reply_text(f"{con.DONE} Cleared token filter - now showing all tokens for this " +
+                                                ("topic" if thread_id else "chat"))
+            else:
+                await update.message.reply_text(f"{con.INFO} No token filter was active for this " +
+                                                ("topic" if thread_id else "chat"))
+
         else:
             await update.message.reply_text(await self.get_info())
 
@@ -713,11 +811,13 @@ class Buybot(TGBFPlugin):
                     chat_id = None
                     thread_id = None
                     min_value = None
+                    allowed_tokens = None
 
                     if isinstance(chat_entry, dict):
                         chat_id = chat_entry.get("chat_id")
                         thread_id = chat_entry.get("thread_id")
                         min_value = chat_entry.get("min_value")
+                        allowed_tokens = chat_entry.get("allowed_tokens")
                     else:
                         chat_id = chat_entry
 
@@ -725,6 +825,12 @@ class Buybot(TGBFPlugin):
                     if min_value is not None and xian_amount < min_value:
                         self.log.info(
                             f"Skipping notification for chat {chat_id} - trade amount {xian_amount} XIAN below minimum {min_value} XIAN")
+                        continue
+
+                    # Check token filtering
+                    if allowed_tokens is not None and token_symbol not in allowed_tokens:
+                        self.log.info(
+                            f"Skipping notification for chat {chat_id} - {token_symbol} not in allowed tokens: {allowed_tokens}")
                         continue
 
                     # Send message with thread_id if available
