@@ -145,8 +145,7 @@ class Price(TGBFPlugin):
 
             # Calculate 24h volume
             hours_24_ago = datetime.utcnow() - timedelta(hours=24)
-            volume_24h = sum(candle['volume'] for candle in candles
-                             if candle['time'] >= hours_24_ago)
+            volume_24h = self.calculate_24h_volume_from_trades(events, base_is_token0)
 
             # Calculate 24h high and low
             candles_24h = [candle for candle in candles if candle['time'] >= hours_24_ago]
@@ -206,6 +205,47 @@ class Price(TGBFPlugin):
             })
 
         return pairs
+
+    def calculate_24h_volume_from_trades(self, events, base_is_token0=True):
+        """Calculate 24h volume directly from raw trade events"""
+        if not events:
+            return 0
+
+        hours_24_ago = datetime.utcnow() - timedelta(hours=24)
+        volume_24h = 0
+
+        for edge in events:
+            node = edge['node']
+
+            # Parse timestamp
+            timestamp_str = node['created']
+            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+
+            # Skip trades older than 24 hours
+            if timestamp < hours_24_ago:
+                continue
+
+            # Parse trade data
+            swap_data = json.loads(node['data']) if isinstance(node['data'], str) else node['data']
+
+            amount0_in = float(swap_data.get('amount0In', 0) or 0)
+            amount0_out = float(swap_data.get('amount0Out', 0) or 0)
+            amount1_in = float(swap_data.get('amount1In', 0) or 0)
+            amount1_out = float(swap_data.get('amount1Out', 0) or 0)
+
+            # Calculate volume for this trade in base token
+            if amount0_out > 0 and amount1_in > 0:
+                # Buying token0 with token1
+                volume = amount0_out if base_is_token0 else amount1_in
+            elif amount0_in > 0 and amount1_out > 0:
+                # Selling token0 for token1
+                volume = amount0_in if base_is_token0 else amount1_out
+            else:
+                volume = 0
+
+            volume_24h += volume
+
+        return volume_24h
 
     async def fetch_token_symbols(self, token_contracts):
         """Fetch token symbols for multiple token contracts in one query"""
