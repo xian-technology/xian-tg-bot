@@ -162,15 +162,34 @@ class Price(TGBFPlugin):
             else:
                 timeframe_str = f"{limit} intervals of {interval_minutes}m"
 
+            # Calculate market cap for XIAN
+            market_cap = None
+            if base_symbol.upper() == 'XIAN':
+                total_supply = 111_111_111  # XIAN total supply
+                market_cap = current_price * total_supply
+
             # Create the price message
-            message_text = (
-                f"{direction} <b>{base_symbol}-{quote_symbol}</b> {timeframe_str}\n\n"
-                f"<code>Price:         {current_price:.6f} {quote_symbol}</code>\n"
-                f"<code>Change:       {price_change:+.6f} {quote_symbol} ({price_change_pct:+.2f}%)</code>\n"
-                f"<code>24h High:      {high_24h:.6f} {quote_symbol}</code>\n"
-                f"<code>24h Low:       {low_24h:.6f} {quote_symbol}</code>\n"
-                f"<code>24h Volume:    {volume_24h:.2f} {base_symbol}</code>"
-            )
+            if market_cap is not None:
+                # Include market cap
+                message_text = (
+                    f"{direction} <b>{base_symbol}-{quote_symbol}</b> {timeframe_str}\n\n"
+                    f"<code>Price:         {current_price:.6f} {quote_symbol}</code>\n"
+                    f"<code>Change:       {price_change:+.6f} {quote_symbol} ({price_change_pct:+.2f}%)</code>\n"
+                    f"<code>24h High:      {high_24h:.6f} {quote_symbol}</code>\n"
+                    f"<code>24h Low:       {low_24h:.6f} {quote_symbol}</code>\n"
+                    f"<code>24h Volume:    {volume_24h:.2f} {base_symbol}</code>\n"
+                    f"<code>Market Cap:    {market_cap:,.0f} {quote_symbol}</code>"
+                )
+            else:
+                # No market cap for non-XIAN pairs
+                message_text = (
+                    f"{direction} <b>{base_symbol}-{quote_symbol}</b> {timeframe_str}\n\n"
+                    f"<code>Price:         {current_price:.6f} {quote_symbol}</code>\n"
+                    f"<code>Change:       {price_change:+.6f} {quote_symbol} ({price_change_pct:+.2f}%)</code>\n"
+                    f"<code>24h High:      {high_24h:.6f} {quote_symbol}</code>\n"
+                    f"<code>24h Low:       {low_24h:.6f} {quote_symbol}</code>\n"
+                    f"<code>24h Volume:    {volume_24h:.2f} {base_symbol}</code>"
+                )
 
             await message.edit_text(message_text)
 
