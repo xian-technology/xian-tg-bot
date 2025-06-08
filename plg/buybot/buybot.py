@@ -649,6 +649,19 @@ class Buybot(TGBFPlugin):
                 amount_in_float = 0
                 amount_out_float = 0
 
+            # Calculate price per token
+            price_text = ""
+
+            if amount_in_float > 0 and amount_out_float > 0:
+                if pair_id == 1:  # XIAN-XUSDC pair
+                    # Price = XUSDC spent / XIAN received (XUSDC per XIAN)
+                    price_per_token = amount_in_float / amount_out_float
+                    price_text = f"💲 Price: <code>{utl.format_float(price_per_token)}</code> XUSDC per XIAN"
+                else:
+                    # For other pairs, show XIAN spent per token received
+                    price_per_token = amount_in_float / amount_out_float
+                    price_text = f"💲 Price: <code>{utl.format_float(price_per_token)}</code> XIAN per {token_symbol}"
+
             # Determine the XIAN amount for minimum value checking
             if pair_id == 1:  # XIAN-XUSDC pair
                 # For XIAN buys, check the XIAN amount being bought (amount_out)
@@ -661,16 +674,27 @@ class Buybot(TGBFPlugin):
             buyer_address = arguments.get("to", "Unknown")
             short_address = buyer_address[:6] + "..." + buyer_address[-4:] if len(buyer_address) > 10 else buyer_address
 
-            # Improved emoji scaling - logarithmic scale for more reasonable emoji counts
-            def calculate_emoji_count(amount, base=2, multiplier=3, min_count=3, max_count=15):
-                if amount <= 0:
-                    return min_count
-                import math
-                count = base + int(math.log10(max(1, amount)) * multiplier)
-                return max(min_count, min(max_count, count))
+            # Calculate USD value for emoji scaling
+            usd_value = 0
+            if pair_id == 1:  # XIAN-XUSDC pair
+                # Use XUSDC amount as USD value
+                usd_value = amount_in_float  # XUSDC spent to buy XIAN
+            else:
+                # For other pairs, estimate USD value using XIAN amount
+                # You could fetch current XIAN/USD price here, or use a reasonable estimate
+                # For now, using a simple estimation (adjust as needed)
+                xian_usd_estimate = 0.045  # Estimate: $0.045 per XIAN (update this as needed)
+                usd_value = xian_amount * xian_usd_estimate
 
-            # Dynamic emoji count based on XIAN amount (consistent across all pairs)
-            emoji_count = calculate_emoji_count(xian_amount)
+            # Calculate emoji count: each 🟢 represents $5
+            def calculate_emoji_count_usd(usd_amount, dollars_per_emoji=5, min_count=1, max_count=20):
+                if usd_amount <= 0:
+                    return min_count
+                count = max(1, int(usd_amount / dollars_per_emoji))
+                return min(max_count, count)
+
+            # Dynamic emoji count based on USD value
+            emoji_count = calculate_emoji_count_usd(usd_value)
             emoji_line = "🟢" * emoji_count
 
             # Format buy message
@@ -689,14 +713,19 @@ class Buybot(TGBFPlugin):
             tx_link = f"{explorer_url}/tx/{tx_hash}"
             address_link = f"{explorer_url}/addresses/{buyer_address}"
 
-            # Build the message
+            # Build the message with price
             message = (
                 f"<b>{title}</b>\n"
                 f"{emoji_line}\n\n"
                 f"{spent_text}\n"
-                f"{got_text}\n\n"
-                f"👤 <a href='{address_link}'>Trader ({short_address})</a> / <a href='{tx_link}'>TX</a>"
+                f"{got_text}\n"
             )
+
+            # Add price information if available
+            if price_text:
+                message += f"{price_text}\n"
+
+            message += f"\n👤 <a href='{address_link}'>Trader ({short_address})</a> / <a href='{tx_link}'>TX</a>"
 
             # Send to all watched chats
             if self.watched_chats is None:
