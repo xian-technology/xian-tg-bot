@@ -521,62 +521,44 @@ class Buybot(TGBFPlugin):
             fallback = contract_address.replace("con_", "").upper()
             return fallback
 
-    async def get_pair_info(self, pair_id):
-        """Get information about a trading pair with caching"""
-        # Return from cache if available
+    async def get_pair_tokens(self, pair_id):
+        """Get token contracts for a pair by querying the blockchain directly"""
         if pair_id in self.pair_info_cache:
             return self.pair_info_cache[pair_id]
 
-        # Get pairs from config
-        watched_pairs = self.cfg.get("watched_pairs") or []
+        try:
+            xian = await self.get_xian()
 
-        # Convert to dictionary for quick lookup
-        pairs = {}
-        for pair in watched_pairs:
-            if 'id' in pair and 'token0' in pair and 'token1' in pair and 'symbol0' in pair and 'symbol1' in pair:
-                pairs[pair['id']] = (
-                    pair['token0'],
-                    pair['token1'],
-                    pair['symbol0'],
-                    pair['symbol1']
-                )
+            # Query the pair contract to get token0 and token1
+            token0 = xian.get_state('con_pairs', 'pairs', str(pair_id), 'token0')
+            token1 = xian.get_state('con_pairs', 'pairs', str(pair_id), 'token1')
 
-        # Default pairs if none in config
-        if not pairs:
-            pairs = {
-                1: ("con_usdc", "currency", "XUSDC", "XIAN"),
-                2: ("con_poop_coin", "currency", "POOP", "XIAN")
-            }
+            if token0 and token1:
+                # Get symbols for both tokens
+                symbol0 = await self.get_token_symbol(token0)
+                symbol1 = await self.get_token_symbol(token1)
 
-        if pair_id in pairs:
-            self.pair_info_cache[pair_id] = pairs[pair_id]
-            return pairs[pair_id]
+                pair_info = (token0, token1, symbol0, symbol1)
+                # Cache the result
+                self.pair_info_cache[pair_id] = pair_info
+                return pair_info
 
-        # For unknown pairs, return None
+        except Exception as e:
+            self.log.debug(f"Error getting pair info for pair {pair_id}: {e}")
+
         return None
 
+    async def get_pair_info(self, pair_id):
+        """Get information about a trading pair - now uses blockchain lookup"""
+        return await self.get_pair_tokens(pair_id)
+
     async def get_token_for_pair(self, pair_id, is_source=True):
-        """Get token contract for a pair ID using config"""
-        # Get pairs from config
-        watched_pairs = self.cfg.get("watched_pairs") or []
+        """Get token contract for a pair ID - now uses blockchain lookup"""
+        pair_info = await self.get_pair_tokens(pair_id)
 
-        # Convert to dictionary for quick lookup
-        pairs = {}
-        for pair in watched_pairs:
-            if 'id' in pair and 'token0' in pair and 'token1' in pair:
-                pairs[pair['id']] = (pair['token0'], pair['token1'])
-
-        # Default pairs if none in config
-        if not pairs:
-            pairs = {
-                1: ("con_usdc", "currency")
-            }
-
-        if pair_id in pairs:
-            if is_source:
-                return pairs[pair_id][0]
-            else:
-                return pairs[pair_id][1]
+        if pair_info:
+            token0, token1, _, _ = pair_info
+            return token0 if is_source else token1
 
         return "Unknown"
 
@@ -587,8 +569,14 @@ class Buybot(TGBFPlugin):
             src_token = arguments.get("src", "")
             pair_id = arguments.get("pair", 1)
 
-            # Get pair information if available
-            pair_info = await self.get_pair_info(pair_id)
+            # Get pair information dynamically from blockchain
+            pair_info = await self.get_pair_tokens(pair_id)
+
+            if not pair_info:
+                self.log.warning(f"Could not determine tokens for pair {pair_id}")
+                return
+
+            token0, token1, symbol0, symbol1 = pair_info
             token_symbol = None
 
             # For XIAN-XUSDC pair (pair_id 1), we want to show transactions where people BUY XIAN
@@ -603,35 +591,22 @@ class Buybot(TGBFPlugin):
                 spent_token = "XUSDC"
                 got_token = "XIAN"
             else:
-                # For other pairs, try to determine tokens based on pair_info or direct lookup
-                if pair_info:
-                    token0, token1, symbol0, symbol1 = pair_info
-
-                    # Skip if not spending XIAN (src != currency)
-                    if src_token.upper() != "CURRENCY":
-                        self.log.info(f"Skipping sell transaction for pair {pair_id} - buybot only shows buys")
-                        return
-
-                    # We're buying token0 or token1 with XIAN
-                    token_symbol = symbol0 if token0 != "currency" else symbol1
+                # For other pairs, determine tokens based on src_token and pair info
+                if src_token.upper() == "CURRENCY":
+                    # Buying token0 or token1 with XIAN
+                    # Determine which token is not XIAN/currency
+                    if token0.upper() == "CURRENCY":
+                        token_symbol = symbol1
+                        got_token = symbol1
+                    else:
+                        token_symbol = symbol0
+                        got_token = symbol0
                     spent_token = "XIAN"
-                    got_token = token_symbol
                 else:
-                    # Try to get symbols directly from contracts
+                    # Skip if not buying with XIAN
                     src_symbol = await self.get_token_symbol(src_token)
-
-                    # Skip if not buying with XIAN or selling XIAN
-                    if src_token.upper() != "CURRENCY" and src_symbol != "XIAN":
-                        self.log.info(f"Skipping transaction with non-XIAN source token: {src_symbol}")
-                        return
-
-                    # Find the destination token (the one being bought)
-                    dst_token = "currency" if src_token != "currency" else await self.get_token_for_pair(pair_id,
-                                                                                                         is_source=False)
-
-                    token_symbol = await self.get_token_symbol(dst_token)
-                    spent_token = src_symbol
-                    got_token = token_symbol
+                    self.log.info(f"Skipping transaction - not buying with XIAN (source: {src_symbol})")
+                    return
 
             # Extract amounts
             amount_in_obj = arguments.get("amountIn", {})
