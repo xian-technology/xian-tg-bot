@@ -495,8 +495,7 @@ class Buybot(TGBFPlugin):
 
                             # We found a matching direct function call!
                             self.log.info(f"Found DEX function call: {contract}.{function}")
-                            await self.send_dex_notification(contract, function, arguments,
-                                                             decoded_data.get('hash', tx_hash))
+                            await self.send_dex_notification(contract, function, arguments, tx_hash)
                             return  # Process only once
 
                 # Look for Swap events in the transaction
@@ -574,8 +573,7 @@ class Buybot(TGBFPlugin):
                                 "deadline": {"__time__": self.format_current_time_for_display()}
                             }
 
-                            await self.send_dex_notification(contract, function, arguments,
-                                                             decoded_data.get('hash', tx_hash))
+                            await self.send_dex_notification(contract, function, arguments, tx_hash)
                             return  # Process only once
             except Exception as e:
                 self.log.debug(f"Failed to decode transaction data: {e}")
@@ -744,8 +742,8 @@ class Buybot(TGBFPlugin):
                 xian_amount = amount_in_float
 
             # Get buyer address
-            buyer_address = arguments.get("to", "Unknown")
-            short_address = buyer_address[:6] + "..." + buyer_address[-4:] if len(buyer_address) > 10 else buyer_address
+            buyer_addr = arguments.get("to", "Unknown")
+            short_address = buyer_addr[:4] + "..." + buyer_addr[-4:] if len(buyer_addr) > 10 else buyer_addr
 
             # Calculate USD value for emoji scaling
             usd_value = 0
@@ -784,7 +782,7 @@ class Buybot(TGBFPlugin):
             # Get links
             explorer_url = self.cfg_global.get('xian', 'explorer')
             tx_link = f"{explorer_url}/tx/{tx_hash}"
-            address_link = f"{explorer_url}/addresses/{buyer_address}"
+            address_link = f"{explorer_url}/addresses/{buyer_addr}"
 
             # Build the message with price
             message = (
@@ -824,13 +822,15 @@ class Buybot(TGBFPlugin):
                     # Check minimum value threshold
                     if min_value is not None and xian_amount < min_value:
                         self.log.info(
-                            f"Skipping notification for chat {chat_id} - trade amount {xian_amount} XIAN below minimum {min_value} XIAN")
+                            f"Skipping notification for chat {chat_id} - "
+                            f"trade amount {xian_amount} XIAN below minimum {min_value} XIAN")
                         continue
 
                     # Check token filtering
                     if allowed_tokens is not None and token_symbol not in allowed_tokens:
                         self.log.info(
-                            f"Skipping notification for chat {chat_id} - {token_symbol} not in allowed tokens: {allowed_tokens}")
+                            f"Skipping notification for chat {chat_id} - "
+                            f"{token_symbol} not in allowed tokens: {allowed_tokens}")
                         continue
 
                     # Send message with thread_id if available
