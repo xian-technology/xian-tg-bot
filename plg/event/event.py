@@ -214,7 +214,6 @@ class Event(TGBFPlugin):
                         self.log.error(f'Error processing transaction {tx_hash}: {e}')
         except Exception as e:
             self.log.error(f'Error in on_message: {e}')
-            await self.notify(e)
 
     async def on_error(self, error):
         self.log.error(f'Websocket error: {error}')
