@@ -12,7 +12,7 @@ from pathlib import Path
 from loguru import logger
 from functools import wraps
 from pickledb import PickleDB
-from xian_py.xian import Xian
+from xian_py import XianAsync
 from xian_py.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
@@ -841,7 +841,7 @@ class TGBFPlugin:
         self.log.info(f'Address {wallet.public_key} created for user ID {user_id}')
         return wallet
 
-    async def get_xian(self, node: str = None, chain_id: str = None, wallet: Wallet = None) -> Xian:
+    async def get_xian(self, node: str = None, chain_id: str = None, wallet: Wallet = None) -> XianAsync:
         """ Return a Xian Network node instance """
 
         if node is None:
@@ -849,7 +849,7 @@ class TGBFPlugin:
         if chain_id is None:
             chain_id = self.cfg_global.get('xian', 'chain_id')
 
-        xian = Xian(node, chain_id, wallet)
+        xian = XianAsync(node, chain_id, wallet)
 
         if chain_id is None:
             global_node = self.cfg_global.get('xian', 'node')

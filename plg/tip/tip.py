@@ -105,7 +105,7 @@ class Tip(TGBFPlugin):
 
         try:
             # Send token
-            send = xian.send(amount, to_address, token=contract)
+            send = await xian.send(amount, to_address, token=contract)
             self.log.debug(f'Tip TX: {send}')
         except Exception as e:
             msg = f"TIP Error: {e}"

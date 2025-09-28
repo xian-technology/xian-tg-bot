@@ -46,7 +46,7 @@ class Approve(TGBFPlugin):
 
         try:
             # Approve contract
-            approve = xian.approve(contract, token=token, amount=amount)
+            approve = await xian.approve(contract, token=token, amount=amount)
         except Exception as e:
             msg = f"APPROVE Error: {e}"
             self.log.error(msg)

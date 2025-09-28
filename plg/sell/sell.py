@@ -185,7 +185,7 @@ class Sell(TGBFPlugin):
             await event_plugin.force_reconnect()
 
         try:
-            approved_amount = xian.get_approved_amount(contract, token=sell_contract)
+            approved_amount = await xian.get_approved_amount(contract, token=sell_contract)
             self.log.debug(f'Approved amount: {approved_amount}')
         except Exception as e:
             msg = f"GET APPROVED AMOUNT Error: {e}"
@@ -196,7 +196,7 @@ class Sell(TGBFPlugin):
 
         if approved_amount < amount:
             try:
-                approve = xian.approve(contract, token=sell_contract)
+                approve = await xian.approve(contract, token=sell_contract)
                 self.log.debug(f'Approve TX: {approve}')
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
@@ -224,7 +224,7 @@ class Sell(TGBFPlugin):
                 return
 
         try:
-            sell = xian.send_tx(
+            sell = await xian.send_tx(
                 contract,
                 "sell",
                 kwargs={

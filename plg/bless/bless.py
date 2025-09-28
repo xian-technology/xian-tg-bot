@@ -215,7 +215,7 @@ class Bless(TGBFPlugin):
             await event_plugin.force_reconnect()
 
         try:
-            approved_amount = xian.get_approved_amount(multisend_contract, token=contract)
+            approved_amount = await xian.get_approved_amount(multisend_contract, token=contract)
             self.log.debug(f'Approved amount: {approved_amount}')
         except Exception as e:
             msg = f"GET APPROVED AMOUNT Error: {e}"
@@ -227,7 +227,7 @@ class Bless(TGBFPlugin):
         if approved_amount < amount_total:
             try:
                 # Approve sending tokens to contract
-                approve = xian.approve(multisend_contract, token=contract)
+                approve = await xian.approve(multisend_contract, token=contract)
                 self.log.debug(f'Approve: {approve}')
 
                 if not approve['success']:
@@ -260,7 +260,7 @@ class Bless(TGBFPlugin):
 
         try:
             # Execute contract to send tokens
-            send = xian.send_tx(multisend_contract, multisend_function, kwargs)
+            send = await xian.send_tx(multisend_contract, multisend_function, kwargs)
             self.log.debug(f'Bless TX: {send}')
         except Exception as e:
             msg = f"SEND Error: {e}"

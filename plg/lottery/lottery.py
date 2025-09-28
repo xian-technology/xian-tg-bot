@@ -109,7 +109,7 @@ class Lottery(TGBFPlugin):
             await event_plugin.force_reconnect()
 
         try:
-            approved_amount = xian.get_approved_amount(lottery_contract, token=token_contract)
+            approved_amount = await xian.get_approved_amount(lottery_contract, token=token_contract)
             self.log.debug(f'approved amount: {approved_amount}')
         except Exception as e:
             msg = f"GET APPROVED AMOUNT Error: {e}"
@@ -120,7 +120,7 @@ class Lottery(TGBFPlugin):
 
         if approved_amount < amount:
             try:
-                approve = xian.approve(lottery_contract, token=token_contract)
+                approve = await xian.approve(lottery_contract, token=token_contract)
                 self.log.debug(f'Approve TX: {approve}')
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
@@ -155,7 +155,7 @@ class Lottery(TGBFPlugin):
 
         try:
             # Execute contract to start lottery
-            send = xian.send_tx(lottery_contract, 'lottery_start', kwargs)
+            send = await xian.send_tx(lottery_contract, 'lottery_start', kwargs)
             self.log.debug(f'Lottery Start TX: {send}')
         except Exception as e:
             msg = f"Lottery Start Error: {e}"
@@ -175,7 +175,7 @@ class Lottery(TGBFPlugin):
                 creator = "@" + from_user.username if from_user.username else from_user.first_name
                 creator = creator if creator.startswith('@') else f'<code>{creator}</code>'
 
-                ticker = xian.get_state(
+                ticker = await xian.get_state(
                     token_contract,
                     'metadata',
                     'token_symbol'
@@ -260,7 +260,7 @@ class Lottery(TGBFPlugin):
         # PARTICIPATE in lottery
         if lottery_command == 'add':
             try:
-                send = xian.send_tx(
+                send = await xian.send_tx(
                     lottery_contract,
                     'lottery_register',
                     {'lottery_id': lottery_id}
@@ -327,7 +327,7 @@ class Lottery(TGBFPlugin):
         # END lottery
         if lottery_command == 'end':
             try:
-                send = xian.send_tx(
+                send = await xian.send_tx(
                     lottery_contract,
                     'lottery_end',
                     {'lottery_id': lottery_id}

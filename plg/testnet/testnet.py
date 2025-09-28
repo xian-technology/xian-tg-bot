@@ -2,9 +2,9 @@ import asyncio
 
 import constants as con
 
-from plugin import TGBFPlugin
 from telegram import Update
-from xian_py.xian import Xian
+from plugin import TGBFPlugin
+from xian_py import XianAsync
 from xian_py.wallet import Wallet
 from telegram.ext import CallbackContext, CommandHandler
 from datetime import datetime, timezone, timedelta
@@ -80,7 +80,7 @@ class Testnet(TGBFPlugin):
             )
 
             # Get user's balance
-            balance = testnet.get_balance(user_wallet.public_key)
+            balance = await testnet.get_balance(user_wallet.public_key)
 
             await message.edit_text(
                 f"{con.INFO} Balance: <code>{balance}</code> tXIAN\n"
@@ -160,7 +160,7 @@ class Testnet(TGBFPlugin):
 
             # Check user's balance
             from_address = from_wallet.public_key
-            balance = testnet.get_balance(from_address)
+            balance = await testnet.get_balance(from_address)
 
             if balance < amount:
                 await message.edit_text(
@@ -172,7 +172,7 @@ class Testnet(TGBFPlugin):
 
             try:
                 # Send testnet XIAN from user's wallet
-                send = testnet.send(amount, to_address)
+                send = await testnet.send(amount, to_address)
                 self.log.debug(f'Send TX: {send}')
             except Exception as e:
                 msg = f"SEND Error: {e}"
@@ -207,7 +207,7 @@ class Testnet(TGBFPlugin):
             await self.notify(e)
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 
-    async  def check_tx(self, node: Xian, tx_hash: str, interval: int = 3, total: int = 9) -> bool:
+    async  def check_tx(self, node: XianAsync, tx_hash: str, interval: int = 3, total: int = 9) -> bool:
         waiting = 0
 
         while waiting <= total:
@@ -215,7 +215,7 @@ class Testnet(TGBFPlugin):
             waiting += interval
 
             try:
-                tx = node.get_tx(tx_hash)
+                tx = await node.get_tx(tx_hash)
                 if tx["success"]:
                     return True
             except Exception as e:

@@ -596,7 +596,7 @@ class Buybot(TGBFPlugin):
         try:
             # Get token symbol from blockchain
             xian = await self.get_xian()
-            ticker = xian.get_state(
+            ticker = await xian.get_state(
                 contract_address,
                 'metadata',
                 'token_symbol'
@@ -626,8 +626,8 @@ class Buybot(TGBFPlugin):
             xian = await self.get_xian()
 
             # Query the pair contract to get token0 and token1
-            token0 = xian.get_state('con_pairs', 'pairs', str(pair_id), 'token0')
-            token1 = xian.get_state('con_pairs', 'pairs', str(pair_id), 'token1')
+            token0 = await xian.get_state('con_pairs', 'pairs', str(pair_id), 'token0')
+            token1 = await xian.get_state('con_pairs', 'pairs', str(pair_id), 'token1')
 
             if token0 and token1:
                 # Get symbols for both tokens

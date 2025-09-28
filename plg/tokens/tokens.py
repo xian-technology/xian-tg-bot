@@ -82,7 +82,7 @@ class Tokens(TGBFPlugin):
                         continue
 
                     try:
-                        ticker = xian.get_state(
+                        ticker = await xian.get_state(
                             entry['name'],
                             'metadata',
                             'token_symbol'
@@ -130,7 +130,7 @@ class Tokens(TGBFPlugin):
                         continue
 
                     try:
-                        ticker = xian.get_state(
+                        ticker = await xian.get_state(
                             token,
                             'metadata',
                             'token_symbol'
@@ -191,7 +191,7 @@ class Tokens(TGBFPlugin):
                 if lvl2 == 'currency':
                     ticker = 'XIAN'
                 else:
-                    ticker = xian.get_state(
+                    ticker = await xian.get_state(
                         lvl2,
                         'metadata',
                         'token_symbol'

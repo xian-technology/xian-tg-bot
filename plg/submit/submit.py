@@ -64,7 +64,7 @@ class Submit(TGBFPlugin):
             await event_plugin.force_reconnect()
 
         try:
-            deploy = xian.submit_contract(name, code)
+            deploy = await xian.submit_contract(name, code)
             self.log.debug(f'Submit TX: {deploy}')
         except Exception as e:
             msg = f"DEPLOY_CONTRACT Error: {e}"
