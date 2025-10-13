@@ -3,7 +3,7 @@ import ast
 import constants as con
 
 from telegram.ext import CallbackContext, CommandHandler
-from xian_py.transaction import simulate_tx
+from xian_py.transaction import simulate_tx, simulate_tx_async
 from plugin import TGBFPlugin
 from telegram import Update
 
@@ -11,7 +11,7 @@ from telegram import Update
 class Simulate(TGBFPlugin):
 
     async def init(self):
-        await self.add_handler(CommandHandler('simulate_tx', self.simulate_callback, block=False))
+        await self.add_handler(CommandHandler(self.handle, self.simulate_callback, block=False))
 
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
@@ -54,7 +54,7 @@ class Simulate(TGBFPlugin):
 
         try:
             # Simulate transaction
-            simulate = simulate_tx(node_url, payload)
+            simulate = await simulate_tx_async(node_url, payload)
             self.log.debug(f'Simulate TX: {simulate}')
         except Exception as e:
             msg = f"SIMULATE Error: {e}"
