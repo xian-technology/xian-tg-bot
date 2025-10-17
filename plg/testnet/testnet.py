@@ -108,7 +108,7 @@ class Testnet(TGBFPlugin):
 
             try:
                 # Send testnet XIAN from faucet to user
-                send = testnet.send(amount, user_address)
+                send = await testnet.send(amount, user_address)
 
                 if not send["success"]:
                     msg = f"CLAIM Error: {send['message']}"
@@ -243,7 +243,7 @@ class Testnet(TGBFPlugin):
     async def validate_claim(self, testnet, address: str):
         """Validate if address can claim tokens"""
         # Check current balance
-        balance = testnet.get_balance(address)
+        balance = await testnet.get_balance(address)
         threshold = self.cfg.get('threshold')
 
         if balance > threshold:
