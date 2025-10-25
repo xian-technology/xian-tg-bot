@@ -231,7 +231,8 @@ class Buy(TGBFPlugin):
                 kwargs={
                     "buy_token": buy_contract,
                     "sell_token": sell_contract,
-                    "amount": amount
+                    "amount": amount,
+                    "slippage": float(5)
                 }
             )
             self.log.debug(f'Buy TX: {buy}')

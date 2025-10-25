@@ -1,5 +1,5 @@
 {
     "category": "Xian",
     "description": "Sell tokens on the DEX",
-    "contract": "con_dex_noob_wrapper"
+    "contract": "con_dex_simple"
 }
