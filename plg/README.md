@@ -1,225 +1,121 @@
 # Plugin Development Guide
 
-This guide explains how to create plugins for the Xian Telegram Bot Framework.
+This guide explains how to build plugins for the Xian Telegram Bot Framework. Every feature ships as an asynchronous plugin that inherits `TGBFPlugin` and lives under `plg/<feature>/`.
 
-## Plugin Structure
-
-Each plugin should have its own directory in the `plg` folder with the following structure:
-
+## Directory Layout
 ```
 plg/
 └── your_plugin/
-    ├── your_plugin.py        # Main plugin file
-    ├── cfg/                  # Configuration files
-    │   └── your_plugin.json
-    └── res/                  # Resource files
-        ├── your_plugin.html  # Usage info
-        └── other_resources
+    ├── your_plugin.py      # Plugin implementation (class name matches directory)
+    ├── cfg/
+    │   └── your_plugin.json  # Optional plugin-local configuration
+    ├── dat/                # Optional SQLite/kv storage (created on demand)
+    └── res/                # Optional resources (templates, SQL, etc.)
 ```
 
-## Creating a Plugin
-
-1. Create a new directory in the `plg` folder with your plugin name
-2. Create a Python file with the same name as the directory
-3. Create a class with the same name as the directory
-4. The class needs to inherit from `TGBFPlugin`
-5. Implement the required `init()` method
-
-Basic example:
-
+## Minimal Plugin Skeleton
 ```python
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
+from plugin import PluginManifest, TGBFPlugin
+
+
 class YourPlugin(TGBFPlugin):
+    MANIFEST = PluginManifest(
+        description="Describe what the plugin does",
+        category="Utilities",
+        requires=("other_plugin",),
+    )
+
     async def init(self):
-        # Register command handler
         await self.add_handler(
             CommandHandler(self.handle, self.command_callback, block=False)
         )
 
-    @TGBFPlugin.logging()              # Enables logging
-    @TGBFPlugin.send_typing()          # Shows typing indicator
+    @TGBFPlugin.logging()
+    @TGBFPlugin.send_typing()
     async def command_callback(self, update: Update, context: CallbackContext):
         if not update.message:
             return
-            
         await update.message.reply_text("Hello from your plugin!")
 ```
+`init()` runs during plugin enable; use it to register handlers, jobs, or web endpoints. Override `cleanup()` to dispose of resources when the plugin is disabled.
 
-## Configuration
+## Configuration & Metadata
+- Create `cfg/your_plugin.json` when you need custom settings:
+  ```json
+  {
+    "handle": "yourcommand",
+    "category": "Utilities",
+    "description": "What your plugin does",
+    "dependency": ["other_plugin"],
+    "admins": [123456789],
+    "blacklist": [],
+    "whitelist": []
+  }
+  ```
+- Access values with `self.cfg.get("key")`. Use `self.cfg_global` for `cfg/global.json`.
+- `MANIFEST` overrides are optional; without it, the framework infers metadata from config and class attributes. Classic config-driven dependencies still use the `dependency` key that powers `@TGBFPlugin.dependency()`.
 
-Create a JSON configuration file in the plugin's `cfg` directory:
+## Decorators & Helpers
+Use the provided decorators to guard handlers:
+- `@TGBFPlugin.logging()` – log incoming `Update` objects.
+- `@TGBFPlugin.send_typing()` – show typing indicators.
+- `@TGBFPlugin.private()` / `public()` / `owner()` – scope commands.
+- `@TGBFPlugin.blacklist()` / `whitelist()` / `dependency()` – enforce access and dependencies.
 
-```json
-{
-    "handle": "yourcommand",                 # Command trigger (optional)
-    "category": "Your Category",             # For help command grouping
-    "description": "What your plugin does",  # Plugin description
-    "dependency": ["other_plugin"],          # Required plugins
-    "admins": [123456789],                   # Admin user IDs
-    "blacklist": [123456789],                # Blocked user IDs
-    "whitelist": [123456789]                 # Allowed user IDs
-}
-```
+Register additional behaviour with helper methods:
+- `await self.add_handler(handler, group=None)` – attach Telegram handlers.
+- `self.run_once(func, when, data=None)` / `self.run_repeating(...)` – schedule jobs.
+- `await self.notify("message")` – alert the admin defined in `cfg/global.json`.
 
-Access configuration in your code:
+## Data & Resources
+### SQLite (async)
 ```python
-# Get plugin's own config
-value = self.cfg.get("config_key")
+if not await self.table_exists("sample"):
+    await self.exec_sql("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
 
-# Get global config
-value = self.cfg_global.get("config_key")
+result = await self.exec_sql("SELECT * FROM sample WHERE id = ?", some_id)
+rows = result["data"] if result["success"] else []
 ```
+The helpers wrap `aiosqlite` connections and commit automatically. Use `table_exists_global()` and `exec_sql_global()` to work with shared tables.
 
-## Plugin Decorators
-
-The framework provides several decorators to handle common tasks:
-
+### Key-Value Store
 ```python
-@TGBFPlugin.logging()          # Enable logging
-@TGBFPlugin.send_typing()      # Show typing indicator
-@TGBFPlugin.private()          # Only allow in private chats
-@TGBFPlugin.public()           # Only allow in public chats
-@TGBFPlugin.owner()            # Only allow for bot owner
-@TGBFPlugin.blacklist()        # Check blacklist
-@TGBFPlugin.whitelist()        # Check whitelist
-@TGBFPlugin.dependency()       # Check required plugins
+self.kv_set("key", {"value": 1})
+value = self.kv_get("key")
+self.kv_del("key")
 ```
 
-## Database Access
-
-The framework provides both SQLite and key-value storage:
-
+### Resources
+Place templates or SQL under `res/`:
 ```python
-# SQLite example
-async def init(self):
-    # Create table if not exists
-    if not await self.table_exists("your_table"):
-        sql = "CREATE TABLE your_table (id INTEGER PRIMARY KEY)"
-        await self.exec_sql(sql)
-
-    # Execute query
-    sql = "SELECT * FROM your_table WHERE id = ?"
-    result = await self.exec_sql(sql, some_id)
-
-# Key-value storage example
-def save_data(self):
-    # Set value
-    self.kv_set("key", "value")
-    
-    # Get value
-    value = self.kv_get("key")
-    
-    # Delete value
-    self.kv_del("key")
-    
-    # Get all values
-    all_data = self.kv_all()
+html = await self.get_resource("usage.html")
+sql = await self.get_resource_global("create_wallets.sql")
 ```
 
-## Web Endpoints
-
-Add HTTP endpoints to your plugin:
-
+## HTTP Endpoints
 ```python
 from starlette.responses import JSONResponse
 
 async def init(self):
-    await self.add_endpoint('/your-endpoint', self.endpoint_handler)
+    await self.add_endpoint("/your-endpoint", self.endpoint_handler)
 
-async def endpoint_handler(self, param: str = None):
-    return JSONResponse({
-        'status': 'success',
-        'data': 'Response data',
-        'param': param
-    })
+async def endpoint_handler(self, param: str | None = None):
+    return JSONResponse({"status": "ok", "param": param})
 ```
+Endpoints register with the shared FastAPI app and must handle asynchronous execution.
 
-## Resource Files
-
-1. Create a usage info file (`res/your_plugin.html`):
-```html
-<b>How to use the {{handle}} plugin</b>
-
-◾️ Example usage:
-<code>/{{handle}} parameter</code>
-```
-
-2. Access resource in your code:
-```python
-# Get usage info
-info = await self.get_resource("your_plugin.html")
-
-# Get other resource
-data = await self.get_resource("other_file.txt")
-```
-
-## Helper Methods
-
-The framework provides several helper methods:
-
-```python
-# Get plugin instance
-plugin = self.get_plugin("plugin_name")
-
-# Check if plugin is enabled
-is_enabled = self.is_enabled("plugin_name")
-
-# Check if in private chat
-is_private = self.is_private(message)
-
-# Remove message after delay
-await self.remove_msg_after(message, after_secs=10)
-
-# Notify admin
-await self.notify("Something happened")
-```
-
-## Error Handling
-
-Always use try-except blocks and log errors:
-
-```python
-try:
-    # Your code
-    pass
-except Exception as e:
-    # Log error
-    self.log.error(f"Error in plugin: {e}")
-    # Notify admin
-    await self.notify(e)
-    # Inform user
-    await update.message.reply_text(f"❌ An error occurred: {str(e)}")
-```
-
-## Best Practices
-
-1. Always handle edited messages:
-```python
-if not update.message:
-    return
-```
-
-2. Use HTML formatting for messages:
-```python
-await update.message.reply_text(
-    f"<b>Bold text</b>\n"
-    f"<code>Monospace text</code>",
-    parse_mode=ParseMode.HTML
-)
-```
-
-3. Use constants for emojis:
-```python
-import constants as con
-
-await update.message.reply_text(f"{con.INFO} Information message")
-```
-
-4. Clean up resources:
+## Cleanup & Best Practices
 ```python
 async def cleanup(self):
-    # Called when plugin is disabled
-    await self
+    await self.notify("Plugin shutting down")
+    if self.jobs:
+        for job in self.jobs:
+            job.schedule_removal()
+```
+- Always guard against `update.message` being `None` (edited channel posts, callbacks).
+- Prefer HTML strings using constants from `constants.py` for emojis/icons.
+- Keep handlers short; offload blocking work via async helpers or `asyncio.to_thread`.
+- Add tests under `tests/` that stub Telegram/network calls, and run `poetry run pytest`.
