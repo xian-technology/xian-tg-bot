@@ -1,7 +1,7 @@
 import constants as con
 
 from plugin import TGBFPlugin
-from xian_py.transaction import simulate_tx
+from xian_py.transaction import simulate_tx_async
 from telegram.ext import CallbackContext, CommandHandler
 from telegram import Update
 
@@ -105,8 +105,8 @@ class Send(TGBFPlugin):
                 "sender": from_wallet.public_key
             }
 
-            # Check if recipient an XNS name
-            sim = simulate_tx(self.cfg_global.get('xian', 'node'), payload)
+            # Check if recipient is an XNS name
+            sim = await simulate_tx_async(self.cfg_global.get('xian', 'node'), payload)
 
             if sim['result'] == 'None':
                 msg = f"{con.ERROR} Not a valid address, contract or XNS name!"

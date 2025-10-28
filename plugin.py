@@ -8,6 +8,7 @@ import aiosqlite
 import constants as c
 import utils as utl
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from loguru import logger
 from functools import wraps
@@ -16,15 +17,54 @@ from xian_py import XianAsync
 from xian_py.wallet import Wallet
 from telegram.constants import ChatAction
 from telegram import Chat, Update, Message
-from typing import Tuple, Dict, Callable, Any, BinaryIO
+from typing import Any, BinaryIO, Callable, ClassVar, Dict, Iterable, Optional, Tuple
 from telegram.ext import CallbackContext, BaseHandler, Job, CallbackQueryHandler
 from datetime import datetime, timedelta
-from config import ConfigManager
+from config import ConfigManager, ConfigError
 from main import TelegramBot
+
+
+@dataclass(slots=True, frozen=True)
+class PluginManifest:
+    """Declarative metadata describing a plugin."""
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    requires: Tuple[str, ...] = field(default_factory=tuple)
+    version: Optional[str] = None
+    exposed_routes: Tuple[str, ...] = field(default_factory=tuple)
+
+    def materialize(self, plugin: "TGBFPlugin") -> "PluginManifest":
+        """Fill in missing fields using runtime data from ``plugin``."""
+        requires = self.requires or getattr(type(plugin), "requires", tuple())
+        return PluginManifest(
+            name=(self.name or plugin.name),
+            description=self.description or plugin.description,
+            category=self.category or plugin.category,
+            requires=tuple(dict.fromkeys(dep.lower() for dep in requires if dep)),
+            version=self.version,
+            exposed_routes=tuple(dict.fromkeys(self.exposed_routes)),
+        )
+
+
+class PluginLifecycleError(RuntimeError):
+    """Base error for plugin lifecycle failures."""
+
+    def __init__(self, plugin: str, message: str):
+        super().__init__(f"[{plugin}] {message}")
+        self.plugin = plugin
+        self.message = message
+
+
+class PluginDependencyError(PluginLifecycleError):
+    """Raised when plugin dependencies are not satisfied."""
 
 
 class TGBFPlugin:
     log = logger
+    MANIFEST: ClassVar[Optional[PluginManifest]] = None
+    requires: ClassVar[Tuple[str, ...]] = tuple()
 
     def __init__(self, tgb: TelegramBot):
         # Parent that instantiated this plugin
@@ -43,7 +83,12 @@ class TGBFPlugin:
         self._cfg_global = self._tgb.cfg
 
         # Access to plugin config
-        self._cfg = ConfigManager(self.get_cfg_path() / self.get_cfg_name())
+        try:
+            self._cfg = ConfigManager(self.get_cfg_path() / self.get_cfg_name())
+        except ConfigError as exc:
+            raise PluginLifecycleError(self.name, f"Unable to load configuration: {exc}") from exc
+
+        self._manifest_cache: Optional[PluginManifest] = None
 
     async def __aenter__(self):
         """ Executes init() method. Make sure to return 'self' if you override it """
@@ -128,6 +173,24 @@ class TGBFPlugin:
     def endpoints(self) -> Dict[str, Callable]:
         """ Return a list of bot endpoints for this plugin """
         return self._endpoints
+
+    @property
+    def manifest(self) -> PluginManifest:
+        """Return the resolved manifest for this plugin instance."""
+        if self._manifest_cache is None:
+            template = getattr(type(self), "MANIFEST", None)
+            manifest = template.materialize(self) if isinstance(template, PluginManifest) else None
+
+            if manifest is None:
+                manifest = PluginManifest(
+                    name=self.name,
+                    description=self.description,
+                    category=self.category,
+                    requires=tuple(dict.fromkeys(dep.lower() for dep in getattr(type(self), "requires", tuple()) if dep)),
+                )
+
+            self._manifest_cache = manifest
+        return self._manifest_cache
 
     async def add_handler(self, handler: BaseHandler, group: int = None):
         """ Will add bot handlers to this plugins list of handlers
