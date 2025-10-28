@@ -6,12 +6,19 @@ import importlib
 import constants as con
 
 from pathlib import Path
+from types import ModuleType
 from loguru import logger
 from dotenv import load_dotenv
 from telegram.error import InvalidToken
 from telegram.constants import ParseMode
 from telegram.ext import Application, Defaults
 from config import ConfigManager
+from plugin import (
+    TGBFPlugin,
+    PluginLifecycleError,
+    PluginDependencyError,
+    PluginManifest,
+)
 from web import WebAppWrapper
 
 
@@ -21,6 +28,7 @@ class TelegramBot:
         self.cfg = None
         self.web = None
         self.plugins = dict()
+        self.plugin_manifests: dict[str, PluginManifest] = {}
         self._stopping = False
 
     async def cancel_pending_tasks(self):
@@ -89,7 +97,7 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
         finally:
-            os._exit(0)
+            logger.info("Shutdown coroutine finished")
 
     async def run(self, config: ConfigManager, token: str):
         """Main bot execution loop"""
@@ -162,20 +170,31 @@ class TelegramBot:
         await self.disable_plugin(name)
 
         try:
-            module_path = f"{con.DIR_PLG}.{name}.{name}"
-            module = importlib.import_module(module_path)
+            module = await self._load_plugin_module(name)
+            plugin_cls = self._resolve_plugin_class(module, name)
+            plugin_instance: TGBFPlugin = await asyncio.to_thread(plugin_cls, self)
 
-            importlib.reload(module)
+            manifest = plugin_instance.manifest
+            missing_dependencies = [
+                dependency for dependency in manifest.requires if dependency not in self.plugins
+            ]
+            if missing_dependencies:
+                raise PluginDependencyError(
+                    name, f"Missing dependencies: {', '.join(sorted(set(missing_dependencies)))}"
+                )
 
-            async with getattr(module, name.capitalize())(self) as plugin:
+            async with plugin_instance as plugin:
                 self.plugins[name] = plugin
+                self.plugin_manifests[name] = manifest
                 msg = f"Plugin '{name}' enabled"
                 logger.info(msg)
                 return True, msg
 
+        except PluginLifecycleError as exc:
+            logger.error(exc)
+            return False, exc.message
         except Exception as e:
-            msg = f"Plugin '{name}' can not be enabled: {e}"
-            logger.error(msg)
+            logger.exception(f"Plugin '{name}' cannot be enabled")
             return False, str(e)
 
     async def disable_plugin(self, name):
@@ -216,11 +235,32 @@ class TelegramBot:
 
                 msg = f"Plugin '{name}' disabled"
                 logger.info(msg)
+                self.plugin_manifests.pop(name, None)
                 return True, msg
 
             except Exception as e:
                 logger.error(f"Error disabling plugin {name}: {e}")
                 return False, str(e)
+
+    async def _load_plugin_module(self, name: str) -> ModuleType:
+        module_path = f"{con.DIR_PLG}.{name}.{name}"
+
+        def _load() -> ModuleType:
+            module = importlib.import_module(module_path)
+            return importlib.reload(module)
+
+        return await asyncio.to_thread(_load)
+
+    @staticmethod
+    def _resolve_plugin_class(module: ModuleType, name: str) -> type[TGBFPlugin]:
+        class_name = "".join(part.capitalize() for part in name.split("_"))
+        if not hasattr(module, class_name):
+            raise PluginLifecycleError(name, f"Plugin class '{class_name}' not found in module")
+
+        plugin_cls = getattr(module, class_name)
+        if not issubclass(plugin_cls, TGBFPlugin):
+            raise PluginLifecycleError(name, f"'{class_name}' is not a TGBFPlugin subclass")
+        return plugin_cls
 
 
 if __name__ == "__main__":
@@ -249,8 +289,16 @@ if __name__ == "__main__":
             rotation="5 MB"
         )
 
-    # Run the bot
-    asyncio.run(TelegramBot().run(
-        ConfigManager(con.DIR_CFG / con.FILE_CFG),
-        os.getenv('TG_TOKEN'))
-    )
+    bot = TelegramBot()
+    try:
+        asyncio.run(bot.run(
+            ConfigManager(con.DIR_CFG / con.FILE_CFG),
+            os.getenv('TG_TOKEN'))
+        )
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user, shutting down...")
+        try:
+            asyncio.run(bot.shutdown())
+        except RuntimeError:
+            # Event loop may already be closed; best effort log
+            logger.debug("Event loop already closed during shutdown")
