@@ -1,6 +1,7 @@
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+from plugin import TGBFPlugin
 
 
 class Cex(TGBFPlugin):

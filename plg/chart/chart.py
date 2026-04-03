@@ -1,15 +1,15 @@
 import io
 import json
+from datetime import datetime, timedelta
 
 import pandas as pd
-import constants as con
-import plotly.io as pio
 import plotly.graph_objects as go
-
+import plotly.io as pio
+from plotly.subplots import make_subplots
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
+
+import constants as con
 from plugin import TGBFPlugin
 
 

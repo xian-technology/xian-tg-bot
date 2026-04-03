@@ -1,5 +1,6 @@
-from plugin import TGBFPlugin
 from starlette.responses import JSONResponse
+
+from plugin import TGBFPlugin
 
 
 class Api(TGBFPlugin):

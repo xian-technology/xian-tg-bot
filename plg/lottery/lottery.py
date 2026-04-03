@@ -1,13 +1,12 @@
 import os
 import re
-import asyncio
 
-import utils as utl
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
+
 import constants as con
-
+import utils as utl
 from plugin import TGBFPlugin
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
 
 
 class Lottery(TGBFPlugin):
@@ -140,7 +139,7 @@ class Lottery(TGBFPlugin):
                     if not success:
                         await update.message.reply_text(f"{con.ERROR} Approval failed: {result}")
                         return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await update.message.reply_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:

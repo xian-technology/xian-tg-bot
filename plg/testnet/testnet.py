@@ -1,13 +1,13 @@
 import asyncio
-
-import constants as con
+from datetime import UTC, datetime, timedelta
 
 from telegram import Update
-from plugin import TGBFPlugin
+from telegram.ext import CallbackContext, CommandHandler
 from xian_py import XianAsync
 from xian_py.wallet import Wallet
-from telegram.ext import CallbackContext, CommandHandler
-from datetime import datetime, timezone, timedelta
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Testnet(TGBFPlugin):
@@ -126,7 +126,7 @@ class Testnet(TGBFPlugin):
                 return
 
             # Save claim time
-            tz = timezone.utc
+            tz = UTC
             current_dt_str = datetime.now(tz=tz).strftime("%Y-%m-%dT%H:%M:%S")
             self.kv_set(user_address, current_dt_str)
 
@@ -252,7 +252,7 @@ class Testnet(TGBFPlugin):
         # Check last claim time
         past_dt_str = self.kv_get(address)
         if past_dt_str:
-            tz = timezone.utc
+            tz = UTC
             ft = "%Y-%m-%dT%H:%M:%S"
             current_dt = datetime.now(tz=tz)
             past_dt = datetime.strptime(past_dt_str, ft).replace(tzinfo=tz)

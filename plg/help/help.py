@@ -1,7 +1,9 @@
 from collections import OrderedDict
-from plugin import TGBFPlugin
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+from plugin import TGBFPlugin
 
 
 class Help(TGBFPlugin):

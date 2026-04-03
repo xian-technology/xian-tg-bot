@@ -1,10 +1,11 @@
-import utils as utl
 import asyncio
 
-from plugin import TGBFPlugin
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
+from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
+
+import utils as utl
+from plugin import TGBFPlugin
 
 
 class All(TGBFPlugin):

@@ -1,14 +1,15 @@
 import io
-import constants as con
-import plotly.io as pio
-import plotly.graph_objs as go
-
-from io import BytesIO
 from datetime import datetime
-from plugin import TGBFPlugin
-from telegram import Update
+from io import BytesIO
+
+import plotly.graph_objs as go
+import plotly.io as pio
 from pytrends.request import TrendReq
+from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Trend(TGBFPlugin):

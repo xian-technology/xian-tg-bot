@@ -7,7 +7,7 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.13"
 python-telegram-bot = {extras = ["job-queue"], version = "^22"}
 requests = "^2.31.0"
 python-dotenv = "^1.0.1"
@@ -21,7 +21,9 @@ plotly = "^5.18.0"
 pytrends = "^4.9.2"
 kaleido = "0.2.1"
 numpy = "^1.26.4"
-xian-py = "^0.4.0"
+xian-tech-py = {path = "../xian-py", develop = true}
+xian-tech-accounts = {path = "../xian-contracting/packages/xian-accounts", develop = true}
+xian-tech-runtime-types = {path = "../xian-contracting/packages/xian-runtime-types", develop = true}
 websockets = "^12.0"
 pickledb = "^0.9.2"
 dex-trade-api = "^0.1.0"
@@ -44,6 +46,9 @@ filterwarnings = [
 
 [tool.mypy]
 python_version = "3.11"
+files = ["config.py", "constants.py", "tests"]
+follow_imports = "skip"
+exclude = "^(plg/|web\\.py|plugin\\.py|main\\.py)$"
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -54,7 +59,13 @@ plugins = []
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-select = ["E", "F", "I", "N", "UP", "ASYNC"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "ASYNC"]
+ignore = ["ASYNC109", "ASYNC230", "E501", "E722", "N806"]
+
+[tool.ruff.lint.per-file-ignores]
+"plg/**/res/*.py" = ["E741", "F821"]
 
 
 [build-system]

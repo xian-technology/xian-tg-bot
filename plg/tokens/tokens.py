@@ -1,8 +1,8 @@
-import constants as con
-
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Tokens(TGBFPlugin):
@@ -43,7 +43,7 @@ class Tokens(TGBFPlugin):
 
             # List all tokens
             if context.args[0].lower() == 'list':
-                msg = str()
+                msg = ""
 
                 for token in tokens:
                     msg += (f'<code>'

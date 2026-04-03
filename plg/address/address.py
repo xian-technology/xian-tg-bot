@@ -1,13 +1,12 @@
 import io
+
 import segno
-import qrcode_artistic
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
-import utils as utl
 import constants as con
-
+import utils as utl
 from plugin import TGBFPlugin
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
 
 
 class Address(TGBFPlugin):
@@ -84,7 +83,7 @@ class Address(TGBFPlugin):
             return
 
         if "privkey" not in context.user_data:
-            msg = f"Old message. Execute command again"
+            msg = "Old message. Execute command again"
             await context.bot.answer_callback_query(update.callback_query.id, msg)
             return
 

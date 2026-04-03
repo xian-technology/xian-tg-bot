@@ -1,26 +1,27 @@
-import os
-import inspect
 import asyncio
+import inspect
+import os
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from functools import wraps
+from pathlib import Path
+from typing import Any, BinaryIO, ClassVar
+
 import aiohttp
-import pickledb
 import aiosqlite
+import pickledb
+from loguru import logger
+from pickledb import PickleDB
+from telegram import Chat, Message, Update
+from telegram.constants import ChatAction
+from telegram.ext import BaseHandler, CallbackContext, CallbackQueryHandler, Job
+from xian_py import XianAsync
+from xian_py.wallet import Wallet
 
 import constants as c
 import utils as utl
-
-from dataclasses import dataclass, field
-from pathlib import Path
-from loguru import logger
-from functools import wraps
-from pickledb import PickleDB
-from xian_py import XianAsync
-from xian_py.wallet import Wallet
-from telegram.constants import ChatAction
-from telegram import Chat, Update, Message
-from typing import Any, BinaryIO, Callable, ClassVar, Dict, Iterable, Optional, Tuple
-from telegram.ext import CallbackContext, BaseHandler, Job, CallbackQueryHandler
-from datetime import datetime, timedelta
-from config import ConfigManager, ConfigError
+from config import ConfigError, ConfigManager
 from main import TelegramBot
 
 
@@ -28,12 +29,12 @@ from main import TelegramBot
 class PluginManifest:
     """Declarative metadata describing a plugin."""
 
-    name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    requires: Tuple[str, ...] = field(default_factory=tuple)
-    version: Optional[str] = None
-    exposed_routes: Tuple[str, ...] = field(default_factory=tuple)
+    name: str | None = None
+    description: str | None = None
+    category: str | None = None
+    requires: tuple[str, ...] = field(default_factory=tuple)
+    version: str | None = None
+    exposed_routes: tuple[str, ...] = field(default_factory=tuple)
 
     def materialize(self, plugin: "TGBFPlugin") -> "PluginManifest":
         """Fill in missing fields using runtime data from ``plugin``."""
@@ -63,8 +64,8 @@ class PluginDependencyError(PluginLifecycleError):
 
 class TGBFPlugin:
     log = logger
-    MANIFEST: ClassVar[Optional[PluginManifest]] = None
-    requires: ClassVar[Tuple[str, ...]] = tuple()
+    MANIFEST: ClassVar[PluginManifest | None] = None
+    requires: ClassVar[tuple[str, ...]] = tuple()
 
     def __init__(self, tgb: TelegramBot):
         # Parent that instantiated this plugin
@@ -74,10 +75,10 @@ class TGBFPlugin:
         self._name = type(self).__name__.lower()
 
         # All bot handlers for this plugin
-        self._handlers: Dict[int, BaseHandler] = dict()
+        self._handlers: dict[int, BaseHandler] = dict()
 
         # All endpoints of this plugin
-        self._endpoints: Dict[str, Callable] = dict()
+        self._endpoints: dict[str, Callable] = dict()
 
         # Access to global config
         self._cfg_global = self._tgb.cfg
@@ -88,7 +89,7 @@ class TGBFPlugin:
         except ConfigError as exc:
             raise PluginLifecycleError(self.name, f"Unable to load configuration: {exc}") from exc
 
-        self._manifest_cache: Optional[PluginManifest] = None
+        self._manifest_cache: PluginManifest | None = None
 
     async def __aenter__(self):
         """ Executes init() method. Make sure to return 'self' if you override it """
@@ -145,12 +146,12 @@ class TGBFPlugin:
         return self.cfg.get("aliases")
 
     @property
-    def plugins(self) -> Dict:
+    def plugins(self) -> dict:
         """ Return a dict with all plugins: key = plugin name, value = plugin """
         return self.tgb.plugins
 
     @property
-    def jobs(self) -> Tuple[Job, ...]:
+    def jobs(self) -> tuple[Job, ...]:
         """ Return a tuple with all currently active jobs """
         return self.tgb.bot.job_queue.jobs()
 
@@ -165,12 +166,12 @@ class TGBFPlugin:
         return self._cfg
 
     @property
-    def handlers(self) -> Dict[int, BaseHandler]:
+    def handlers(self) -> dict[int, BaseHandler]:
         """ Return a list of bot handlers for this plugin """
         return self._handlers
 
     @property
-    def endpoints(self) -> Dict[str, Callable]:
+    def endpoints(self) -> dict[str, Callable]:
         """ Return a list of bot endpoints for this plugin """
         return self._endpoints
 
@@ -293,13 +294,13 @@ class TGBFPlugin:
         """ Return the content of the file in the given path """
 
         try:
-            with open(path, "r", encoding="utf8") as f:
+            with open(path, encoding="utf8") as f:
                 return f.read()
         except Exception as e:
             self.log.error(e)
             await self.notify(e)
 
-    async def get_jobs(self, name=None) -> Tuple[Job, ...]:
+    async def get_jobs(self, name=None) -> tuple[Job, ...]:
         """ Return jobs with given name or all jobs if not name given """
 
         if name:
@@ -436,7 +437,7 @@ class TGBFPlugin:
 
                     # Check for GraphQL errors
                     if 'errors' in result:
-                        raise Exception(f"GraphQL query returned errors")
+                        raise Exception("GraphQL query returned errors")
 
                     return result
 
@@ -505,7 +506,7 @@ class TGBFPlugin:
 
         return await self._exec_on_db(db_path, sql, *args)
 
-    async def _exec_on_db(self, db_path: Path, sql: str, *args) -> Dict[str, Any]:
+    async def _exec_on_db(self, db_path: Path, sql: str, *args) -> dict[str, Any]:
         """ Open database connection and execute SQL statement """
 
         res = {"data": None, "success": None}
@@ -818,7 +819,7 @@ class TGBFPlugin:
                 try:
                     is_blacklisted = any(
                         entry["group"] == group_id and
-                        (not "thread" in entry or entry["thread"] == thread_id)
+                        ("thread" not in entry or entry["thread"] == thread_id)
                         for entry in blacklist
                     )
 
@@ -855,7 +856,7 @@ class TGBFPlugin:
                 try:
                     is_whitelisted = any(
                         entry["group"] == group_id and
-                        (not "thread" in entry or entry["thread"] == thread_id)
+                        ("thread" not in entry or entry["thread"] == thread_id)
                         for entry in whitelist
                     )
 

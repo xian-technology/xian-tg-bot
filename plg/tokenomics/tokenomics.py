@@ -1,6 +1,7 @@
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+from plugin import TGBFPlugin
 
 
 class Tokenomics(TGBFPlugin):
@@ -17,5 +18,5 @@ class Tokenomics(TGBFPlugin):
 
         await update.message.reply_photo(
                 photo=await self.get_img('tokenomics.png'),
-                caption=f"<code>Total Supply: 111.111.111 XIAN</code>"
+                caption="<code>Total Supply: 111.111.111 XIAN</code>"
             )

@@ -1,22 +1,23 @@
-import websockets
 import asyncio
-import json
 import gc
+import json
 import time
+from collections.abc import Callable
+
+import websockets
+from xian_py.encoding import decode_str
 
 from plugin import TGBFPlugin
-from xian_py.encoding import decode_str
-from typing import Callable, Dict, Tuple, Optional
 
 
 class Event(TGBFPlugin):
     # Key = Tx hash, Value = Callable - function to call
     execute = dict()
     # Store futures for transaction waiting
-    futures: Dict[str, asyncio.Future] = dict()
+    futures: dict[str, asyncio.Future] = dict()
     # Store pending transactions during reconnection
-    pending_tx: Dict[str, Tuple[str, Optional[Callable], bool, int]] = dict()
-    event = str()
+    pending_tx: dict[str, tuple[str, Callable | None, bool, int]] = dict()
+    event = ''
     # Connection status
     is_connected = False
     last_message = 0
@@ -41,7 +42,7 @@ class Event(TGBFPlugin):
                 ping_task = asyncio.create_task(self.ws.ping())
                 await asyncio.wait_for(ping_task, timeout=5.0)
                 self.log.debug("Health check: Connection is healthy")
-            except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
+            except (TimeoutError, websockets.exceptions.ConnectionClosed):
                 self.log.warning("Health check: Connection failed, forcing reconnect...")
                 self.is_connected = False
                 if self.ws_task:
@@ -58,7 +59,7 @@ class Event(TGBFPlugin):
 
         while True:
             try:
-                self.log.info(f'Initiating websocket connection...')
+                self.log.info('Initiating websocket connection...')
 
                 if self.cfg.get('ws_masternode'):
                     uri = self.cfg.get('ws_masternode')
@@ -119,7 +120,7 @@ class Event(TGBFPlugin):
 
                 retry_attempts += 1
                 if retry_attempts > max_retries:
-                    self.log.error(f'Max retries reached. Stopping websocket loop.')
+                    self.log.error('Max retries reached. Stopping websocket loop.')
                     # Fail all pending transactions
                     await self.fail_all_pending("Connection to node lost")
                     break
@@ -240,9 +241,9 @@ class Event(TGBFPlugin):
 
     async def track_tx(self,
                        tx_hash: str,
-                       function_to_call: Optional[Callable] = None,
+                       function_to_call: Callable | None = None,
                        wait: bool = False,
-                       timeout: int = 30) -> Optional[Tuple[bool, str]]:
+                       timeout: int = 30) -> tuple[bool, str] | None:
         """
         Register a callback function for a transaction and optionally wait for confirmation.
 
@@ -285,7 +286,7 @@ class Event(TGBFPlugin):
                 result = await asyncio.wait_for(future, timeout)
                 self.log.debug(f'Wait completed for {tx_hash} with result: {result}')
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Remove the future if timeout occurs
                 self.log.debug(f'Timeout waiting for transaction {tx_hash}')
                 if tx_hash in self.futures:

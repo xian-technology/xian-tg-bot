@@ -1,16 +1,16 @@
+import asyncio
 import gc
 import json
-import asyncio
+from datetime import datetime
+
 import websockets
-
-import utils as utl
-import constants as con
-
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 from xian_py.encoding import decode_str
-from datetime import datetime
+
+import constants as con
+import utils as utl
+from plugin import TGBFPlugin
 
 
 class Buybot(TGBFPlugin):
@@ -192,10 +192,10 @@ class Buybot(TGBFPlugin):
                     break
 
             if min_value is not None:
-                await update.message.reply_text(f"Minimum value for this " +
+                await update.message.reply_text("Minimum value for this " +
                                                 ("topic" if thread_id else "chat") + f": {min_value} XIAN")
             else:
-                await update.message.reply_text(f"No minimum value set for this " +
+                await update.message.reply_text("No minimum value set for this " +
                                                 ("topic" if thread_id else "chat"))
 
         elif subcommand == 'status':
@@ -343,10 +343,10 @@ class Buybot(TGBFPlugin):
 
             if allowed_tokens:
                 token_list = ", ".join(allowed_tokens)
-                await update.message.reply_text(f"Allowed tokens for this " +
+                await update.message.reply_text("Allowed tokens for this " +
                                                 ("topic" if thread_id else "chat") + f": {token_list}")
             else:
-                await update.message.reply_text(f"No token filtering active - showing all tokens for this " +
+                await update.message.reply_text("No token filtering active - showing all tokens for this " +
                                                 ("topic" if thread_id else "chat"))
 
         elif subcommand == 'clearfilter':
@@ -409,7 +409,7 @@ class Buybot(TGBFPlugin):
 
                 retry_attempts += 1
                 if retry_attempts > max_retries:
-                    self.log.error(f'Max retries reached. Stopping buybot websocket loop.')
+                    self.log.error('Max retries reached. Stopping buybot websocket loop.')
                     break
 
                 # Exponential backoff, cap at 60 seconds
@@ -546,7 +546,6 @@ class Buybot(TGBFPlugin):
 
                             # Determine tokens being swapped (with proper type conversion)
                             src_token = "currency"
-                            dst_token = "con_usdc"
 
                             # Safely get values and convert to float if they're strings
                             amount0In = swap_data.get('amount0In', 0)
@@ -558,7 +557,6 @@ class Buybot(TGBFPlugin):
                             # Compare the float values
                             if amount0In > 0:
                                 src_token = "con_usdc"
-                                dst_token = "currency"
 
                             # Format amounts as fixed numbers (keep as strings)
                             amount_in = str(swap_data.get('amount0In', 0) or swap_data.get('amount1In', 0))

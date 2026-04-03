@@ -1,9 +1,9 @@
-import constants as con
-
-from plugin import TGBFPlugin
-from telegram import Update, Chat
-from telegram.ext import CallbackContext, MessageHandler, filters
+from telegram import Chat, Update
 from telegram.error import ChatMigrated
+from telegram.ext import CallbackContext, MessageHandler, filters
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Manage(TGBFPlugin):

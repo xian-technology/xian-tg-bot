@@ -1,10 +1,11 @@
 import io
-import telegram
-import constants as con
-
 from pathlib import Path
-from plugin import TGBFPlugin
+
+import telegram
 from telegram.ext import CallbackContext, MessageHandler, filters
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Submit(TGBFPlugin):

@@ -1,6 +1,7 @@
-from plugin import TGBFPlugin
-from telegram import Update, Chat
+from telegram import Chat, Update
 from telegram.ext import CallbackContext, MessageHandler, filters
+
+from plugin import TGBFPlugin
 
 
 class Active(TGBFPlugin):

@@ -2,12 +2,13 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 ConfigPath = Union[str, Path]
-Validator = Optional[Callable[[Dict[str, Any]], None]]
+Validator = Optional[Callable[[dict[str, Any]], None]]
 
 
 class ConfigError(RuntimeError):
@@ -27,7 +28,7 @@ class ConfigManager:
 
         self._cfg_file = Path(config_file)
         self._validator = validator
-        self._cfg: Dict[str, Any] = {}
+        self._cfg: dict[str, Any] = {}
         self._lock = RLock()
         self.reload()
 
@@ -54,7 +55,7 @@ class ConfigManager:
             except Exception as exc:
                 raise ConfigError(f"Cannot read configuration '{self._cfg_file}': {exc}") from exc
 
-    def get(self, *keys: Union[str, Iterable[str]], default: Any = None, raise_if_missing: bool = False) -> Any:
+    def get(self, *keys: str | Iterable[str], default: Any = None, raise_if_missing: bool = False) -> Any:
         """Return the value for ``keys`` or ``default`` when not found."""
         if not keys:
             return self.snapshot()
@@ -71,7 +72,7 @@ class ConfigManager:
                 cursor = cursor[key]
             return cursor
 
-    def set(self, value: Any, *keys: Union[str, Iterable[str]]) -> None:
+    def set(self, value: Any, *keys: str | Iterable[str]) -> None:
         """Persist ``value`` at ``keys`` and flush to disk atomically."""
         if not keys:
             raise ConfigError("Cannot set value without a key path")
@@ -90,7 +91,7 @@ class ConfigManager:
             cursor[path[-1]] = value
             self._write()
 
-    def remove(self, *keys: Union[str, Iterable[str]]) -> None:
+    def remove(self, *keys: str | Iterable[str]) -> None:
         """Delete a key path and persist changes."""
         if not keys:
             raise ConfigError("Cannot remove value without a key path")
@@ -99,7 +100,7 @@ class ConfigManager:
 
         with self._lock:
             cursor = self._cfg
-            parents: list[Tuple[Dict[str, Any], str]] = []
+            parents: list[tuple[dict[str, Any], str]] = []
 
             for key in path[:-1]:
                 if key not in cursor or not isinstance(cursor[key], dict):
@@ -114,14 +115,14 @@ class ConfigManager:
             self._cleanup_empty_branches(parents)
             self._write()
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         """Return a shallow copy of the current configuration."""
         with self._lock:
             return dict(self._cfg)
 
     # Internal helpers -------------------------------------------------
 
-    def _cleanup_empty_branches(self, parents: Iterable[Tuple[Dict[str, Any], str]]) -> None:
+    def _cleanup_empty_branches(self, parents: Iterable[tuple[dict[str, Any], str]]) -> None:
         """Remove empty dictionaries left behind by deletes."""
         for parent, key in reversed(list(parents)):
             child = parent[key]
@@ -150,7 +151,7 @@ class ConfigManager:
             raise ConfigError(f"Cannot write configuration '{self._cfg_file}': {exc}") from exc
 
     @staticmethod
-    def _flatten_keys(keys: Tuple[Union[str, Iterable[str]], ...]) -> Tuple[str, ...]:
+    def _flatten_keys(keys: tuple[str | Iterable[str], ...]) -> tuple[str, ...]:
         flattened: list[str] = []
         for key in keys:
             if isinstance(key, (list, tuple)):

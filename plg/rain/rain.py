@@ -1,12 +1,11 @@
 import html
-import asyncio
+from datetime import UTC, datetime, timedelta
+
+from telegram import Update
+from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
-
 from plugin import TGBFPlugin
-from telegram import Update
-from datetime import datetime, timedelta, timezone
-from telegram.ext import CallbackContext, CommandHandler
 
 
 class Rain(TGBFPlugin):
@@ -112,9 +111,9 @@ class Rain(TGBFPlugin):
 
         # Determine last valid date time for the airdrop
         if t_unit == "m":
-            last_time = datetime.now(timezone.utc) - timedelta(minutes=t_frame)
+            last_time = datetime.now(UTC) - timedelta(minutes=t_frame)
         elif t_unit == "h":
-            last_time = datetime.now(timezone.utc) - timedelta(hours=t_frame)
+            last_time = datetime.now(UTC) - timedelta(hours=t_frame)
         else:
             msg = f"{con.ERROR} Unsupported time unit"
             await message.edit_text(msg)
@@ -234,7 +233,7 @@ class Rain(TGBFPlugin):
                     if not success:
                         await message.edit_text(f"{con.STOP} Approval failed: {result}")
                         return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
@@ -266,7 +265,7 @@ class Rain(TGBFPlugin):
                     await message.edit_text(f"{msg}\n\n{link}", disable_web_page_preview=True)
                 else:
                     await message.edit_text(f"{con.STOP} {result}")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await message.edit_text(f"{con.ERROR} Rain transaction timeout")
         else:
             await message.edit_text(f"{con.STOP} {send['message']}")

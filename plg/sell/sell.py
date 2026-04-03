@@ -1,11 +1,10 @@
-import asyncio
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
 import constants as con
 import utils as utl
-
 from plugin import TGBFPlugin
-from telegram.ext import CallbackContext, CommandHandler, CallbackQueryHandler
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 
 
 class Sell(TGBFPlugin):
@@ -216,7 +215,7 @@ class Sell(TGBFPlugin):
                     if not success:
                         await message.edit_text(f"{con.ERROR} Approval failed: {result}")
                         return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:

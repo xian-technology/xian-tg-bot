@@ -1,10 +1,10 @@
 import html
 
-import constants as con
-
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Tip(TGBFPlugin):

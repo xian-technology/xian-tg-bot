@@ -1,13 +1,14 @@
-import os
-import sys
 import json
-import psutil
+import os
 import platform
-import utils as utl
+import sys
 
-from plugin import TGBFPlugin
+import psutil
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+import utils as utl
+from plugin import TGBFPlugin
 
 
 class Debug(TGBFPlugin):

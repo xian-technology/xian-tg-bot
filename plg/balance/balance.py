@@ -1,8 +1,8 @@
-import constants as con
-
-from plugin import TGBFPlugin
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Balance(TGBFPlugin):
@@ -24,7 +24,7 @@ class Balance(TGBFPlugin):
 
         message = await update.message.reply_text(f"{con.WAIT} Retrieving balances ...")
 
-        balances = str()
+        balances = ""
 
         try:
             tokens_plg = self.get_plugin('tokens')

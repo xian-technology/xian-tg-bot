@@ -1,9 +1,11 @@
 import json
 from datetime import datetime, timedelta
-from plugin import TGBFPlugin
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
 import constants as con
+from plugin import TGBFPlugin
 
 
 class Price(TGBFPlugin):
@@ -347,8 +349,6 @@ class Price(TGBFPlugin):
             node = edge['node']
 
             # Parse data
-            data_indexed = json.loads(node['dataIndexed']) if isinstance(node['dataIndexed'], str) else node[
-                'dataIndexed']
             swap_data = json.loads(node['data']) if isinstance(node['data'], str) else node['data']
 
             # Parse the timestamp (ensure UTC)

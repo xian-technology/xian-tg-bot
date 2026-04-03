@@ -1,6 +1,7 @@
-import uvicorn
 from pathlib import Path
-from fastapi import FastAPI, APIRouter
+
+import uvicorn
+from fastapi import APIRouter, FastAPI
 from starlette.responses import FileResponse
 
 

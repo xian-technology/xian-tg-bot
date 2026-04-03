@@ -1,8 +1,9 @@
 import asyncio
-import constants as con
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
+
+import constants as con
 from plugin import TGBFPlugin
 
 

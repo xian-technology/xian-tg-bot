@@ -1,23 +1,23 @@
-import os
-import sys
 import asyncio
 import importlib
-
-import constants as con
-
+import os
+import sys
 from pathlib import Path
 from types import ModuleType
-from loguru import logger
+
 from dotenv import load_dotenv
-from telegram.error import InvalidToken
+from loguru import logger
 from telegram.constants import ParseMode
+from telegram.error import InvalidToken
 from telegram.ext import Application, Defaults
+
+import constants as con
 from config import ConfigManager
 from plugin import (
-    TGBFPlugin,
-    PluginLifecycleError,
     PluginDependencyError,
+    PluginLifecycleError,
     PluginManifest,
+    TGBFPlugin,
 )
 from web import WebAppWrapper
 

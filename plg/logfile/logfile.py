@@ -1,9 +1,10 @@
-import constants as con
-
 from pathlib import Path
+
 from telegram import Update
-from plugin import TGBFPlugin
 from telegram.ext import CallbackContext, CommandHandler
+
+import constants as con
+from plugin import TGBFPlugin
 
 
 class Logfile(TGBFPlugin):
