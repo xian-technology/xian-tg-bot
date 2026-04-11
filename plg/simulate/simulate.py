@@ -65,12 +65,12 @@ class Simulate(TGBFPlugin):
 
         status = True if simulate['status'] == 0 else False
         result = simulate['result']
-        stamps = simulate['stamps_used']
+        chi = simulate['chi_used']
         state = simulate['state']
 
         msg = (f'<b>Result of tx simulation</b>\n\n'
                f'Success:\n<pre>{status}</pre>\n\n'
-               f'Stamps used:\n<pre>{stamps}</pre>\n\n'
+               f'Chi used:\n<pre>{chi}</pre>\n\n'
                f'Returned result:\n<pre>{result}</pre>\n\n'
                f'State changes:\n<pre>{state}</pre>\n\n')
 
