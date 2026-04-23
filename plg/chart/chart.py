@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -11,6 +11,7 @@ from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
 from plugin import TGBFPlugin
+from utils import parse_utc_datetime, utc_now
 
 
 class Chart(TGBFPlugin):
@@ -277,7 +278,7 @@ class Chart(TGBFPlugin):
             last_timestamp = None
             if result["success"] and result["data"]:
                 last_timestamp_str = result["data"][0][0]
-                last_timestamp = datetime.fromisoformat(last_timestamp_str)
+                last_timestamp = parse_utc_datetime(last_timestamp_str)
 
             # Fetch new trades from GraphQL
             events = await self.fetch_swap_events(pair_id)
@@ -294,7 +295,7 @@ class Chart(TGBFPlugin):
 
                 # Parse timestamp
                 timestamp_str = node["created"]
-                timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                timestamp = parse_utc_datetime(timestamp_str)
 
                 # Skip if we already have this trade
                 if last_timestamp and timestamp <= last_timestamp:
@@ -364,7 +365,7 @@ class Chart(TGBFPlugin):
         if not events:
             return 0
 
-        hours_24_ago = datetime.utcnow() - timedelta(hours=24)
+        hours_24_ago = utc_now() - timedelta(hours=24)
         volume_24h = 0
 
         for edge in events:
@@ -372,7 +373,7 @@ class Chart(TGBFPlugin):
 
             # Parse timestamp
             timestamp_str = node['created']
-            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            timestamp = parse_utc_datetime(timestamp_str)
 
             # Skip trades older than 24 hours
             if timestamp < hours_24_ago:
@@ -887,7 +888,7 @@ class Chart(TGBFPlugin):
             last_timestamp = None
             if result["success"] and result["data"]:
                 last_timestamp_str = result["data"][0][0]
-                last_timestamp = datetime.fromisoformat(last_timestamp_str.replace("Z", "+00:00"))
+                last_timestamp = parse_utc_datetime(last_timestamp_str)
 
             # Fetch new trades from GraphQL
             events = await self.fetch_swap_events_from_graphql(pair_id)
@@ -901,7 +902,7 @@ class Chart(TGBFPlugin):
 
                 # Parse timestamp
                 timestamp_str = node["created"]
-                timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                timestamp = parse_utc_datetime(timestamp_str)
 
                 # Skip if we already have this trade
                 if last_timestamp and timestamp <= last_timestamp:
@@ -945,7 +946,7 @@ class Chart(TGBFPlugin):
             return []
 
         # Hardcode the first trade timestamp
-        FIRST_TRADE_TIMESTAMP = datetime.fromisoformat("2025-03-27T17:29:38".replace('Z', '+00:00'))
+        FIRST_TRADE_TIMESTAMP = parse_utc_datetime("2025-03-27T17:29:38")
 
         # Extract trades
         trades = []
@@ -957,7 +958,7 @@ class Chart(TGBFPlugin):
 
             # Parse the timestamp (ensure UTC)
             timestamp_str = node['created']
-            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            timestamp = parse_utc_datetime(timestamp_str)
 
             # Calculate price
             amount0_in = float(swap_data.get('amount0In', 0) or 0)
@@ -998,7 +999,7 @@ class Chart(TGBFPlugin):
             return []
 
         # Get time boundaries for candles
-        current_time = datetime.utcnow()
+        current_time = utc_now()
         requested_start_time = current_time - timedelta(minutes=interval_minutes * limit)
 
         # Ensure we don't go before the first trade timestamp

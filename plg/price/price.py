@@ -1,11 +1,12 @@
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
 from plugin import TGBFPlugin
+from utils import parse_utc_datetime, utc_now
 
 
 class Price(TGBFPlugin):
@@ -146,7 +147,7 @@ class Price(TGBFPlugin):
             direction = con.GREEN if price_change >= 0 else con.RED
 
             # Calculate 24h volume
-            hours_24_ago = datetime.utcnow() - timedelta(hours=24)
+            hours_24_ago = utc_now() - timedelta(hours=24)
             volume_24h = self.calculate_24h_volume_from_trades(events, base_is_token0)
 
             # Calculate 24h high and low
@@ -232,7 +233,7 @@ class Price(TGBFPlugin):
         if not events:
             return 0
 
-        hours_24_ago = datetime.utcnow() - timedelta(hours=24)
+        hours_24_ago = utc_now() - timedelta(hours=24)
         volume_24h = 0
 
         for edge in events:
@@ -240,7 +241,7 @@ class Price(TGBFPlugin):
 
             # Parse timestamp
             timestamp_str = node['created']
-            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            timestamp = parse_utc_datetime(timestamp_str)
 
             # Skip trades older than 24 hours
             if timestamp < hours_24_ago:
@@ -353,7 +354,7 @@ class Price(TGBFPlugin):
 
             # Parse the timestamp (ensure UTC)
             timestamp_str = node['created']
-            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            timestamp = parse_utc_datetime(timestamp_str)
 
             # Calculate price
             amount0_in = float(swap_data.get('amount0In', 0) or 0)
@@ -394,7 +395,7 @@ class Price(TGBFPlugin):
             return []
 
         # Get time boundaries for candles
-        current_time = datetime.utcnow()
+        current_time = utc_now()
         start_time = current_time - timedelta(minutes=interval_minutes * limit)
 
         # Round to interval boundaries

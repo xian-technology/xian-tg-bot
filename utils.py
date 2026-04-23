@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -139,6 +139,21 @@ def format_float(value: float | int) -> str:
         return integer_part
 
     return f"{integer_part}.{trimmed_decimal}"
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def parse_utc_datetime(value: str | datetime) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def build_menu(
