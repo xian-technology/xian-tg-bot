@@ -3,14 +3,13 @@
 This guide explains how to build plugins for the Xian Telegram Bot Framework. Every feature ships as an asynchronous plugin that inherits `TGBFPlugin` and lives under `plg/<feature>/`.
 
 ## Directory Layout
-```
-plg/
-└── your_plugin/
-    ├── your_plugin.py      # Plugin implementation (class name matches directory)
-    ├── cfg/
-    │   └── your_plugin.json  # Optional plugin-local configuration
-    ├── dat/                # Optional SQLite/kv storage (created on demand)
-    └── res/                # Optional resources (templates, SQL, etc.)
+```mermaid
+flowchart TD
+  Plugins["plg"] --> Plugin["your_plugin"]
+  Plugin --> Implementation["your_plugin.py"]
+  Plugin --> Config["cfg/your_plugin.json"]
+  Plugin --> Data["dat storage"]
+  Plugin --> Resources["res templates and SQL"]
 ```
 
 ## Minimal Plugin Skeleton

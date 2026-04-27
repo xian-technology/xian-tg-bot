@@ -7,6 +7,20 @@ persistence helpers, and a manifest-driven configuration system, then
 ships a sizable set of Xian-specific plugins (balances, transfers, prices,
 DEX trades, charts, lotteries, admin, …) as ready-to-run features.
 
+## Runtime Shape
+
+```mermaid
+flowchart LR
+  Telegram["Telegram updates"] --> Bot["TelegramBot runtime"]
+  Bot --> Plugins["Plugin registry"]
+  Plugins --> Chain["Xian chain plugins"]
+  Plugins --> Market["Market and DEX plugins"]
+  Plugins --> Admin["Admin plugins"]
+  Plugins --> Web["FastAPI web routes"]
+  Config["Global and plugin config"] --> Plugins
+  Chain --> Node["Xian node"]
+```
+
 ## Quick Start
 
 ```bash
