@@ -1,6 +1,6 @@
 # Xian Telegram Bot Framework
 
-Plugin-first framework for building Telegram bots with Python 3.11, asynchronous handlers, and pluggable FastAPI endpoints. It wraps [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot) with conventions that make it simple to compose features, ship HTTP routes, and persist bot state.
+Plugin-first framework for building Telegram bots with Python 3.14, asynchronous handlers, and pluggable FastAPI endpoints. It wraps [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot) with conventions that make it simple to compose features, ship HTTP routes, and persist bot state.
 
 ## Features
 - **Asynchronous plugins** – isolated modules under `plg/` with optional configs and web resources.
@@ -10,7 +10,7 @@ Plugin-first framework for building Telegram bots with Python 3.11, asynchronous
 - **Operational tooling** – structured logging through `loguru`, graceful shutdown, PM2-ready scripts.
 
 ## Requirements
-- Python 3.11 and Poetry ≥ 1.6 (`curl -sSL https://install.python-poetry.org | python3 -`).
+- Python 3.14 and Poetry >= 1.6 (`curl -sSL https://install.python-poetry.org | python3 -`).
 - Telegram bot token stored in `.env`; additional secrets should live in the same file.
 - Optional PM2 (`npm install -g pm2`) for production process management.
 
