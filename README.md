@@ -26,7 +26,7 @@ flowchart LR
 ```bash
 git clone https://github.com/xian-network/tg-bot.git
 cd tg-bot
-poetry install
+uv sync
 ```
 
 Create a `.env`:
@@ -40,7 +40,7 @@ LOG_INTO_FILE=true
 Run the bot:
 
 ```bash
-poetry run python main.py
+uv run python main.py
 ```
 
 For a PM2-managed production profile:
@@ -127,10 +127,10 @@ expectations.
 ## Validation
 
 ```bash
-poetry run pytest                # async test suite
-poetry run ruff check .          # lint
-poetry run mypy .                # type check
-poetry run python main.py        # launch with current config
+uv run pytest                # async test suite
+uv run ruff check .          # lint
+uv run mypy .                # type check
+uv run python main.py        # launch with current config
 ```
 
 ## Updating
@@ -138,7 +138,7 @@ poetry run python main.py        # launch with current config
 ```bash
 pm2 stop tg-bot
 git pull origin main
-poetry install
+uv sync
 pm2 restart tg-bot
 ```
 
@@ -148,7 +148,7 @@ suite before restarting.
 ## Requirements
 
 - Python 3.14
-- Poetry ≥ 1.6 (`curl -sSL https://install.python-poetry.org | python3 -`)
+- uv
 - Telegram bot token in `.env`
 - Optional: PM2 for production process management
   (`npm install -g pm2`)

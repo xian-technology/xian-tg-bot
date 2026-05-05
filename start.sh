@@ -1,3 +1,5 @@
-#!/bin/bash
-VENV_PATH=$(poetry env info --path)
-exec $VENV_PATH/bin/python main.py
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+exec uv run python main.py

@@ -117,4 +117,4 @@ async def cleanup(self):
 - Always guard against `update.message` being `None` (edited channel posts, callbacks).
 - Prefer HTML strings using constants from `constants.py` for emojis/icons.
 - Keep handlers short; offload blocking work via async helpers or `asyncio.to_thread`.
-- Add tests under `tests/` that stub Telegram/network calls, and run `poetry run pytest`.
+- Add tests under `tests/` that stub Telegram/network calls, and run `uv run pytest`.
