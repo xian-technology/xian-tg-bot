@@ -165,3 +165,4 @@ log/
 .idea
 dat
 bck
+.DS_Store
