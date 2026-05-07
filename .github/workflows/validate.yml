@@ -36,21 +36,21 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install Poetry
-        run: python -m pip install poetry
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
         working-directory: xian-tg-bot
-        run: poetry install --with dev
+        run: uv sync --group dev
 
       - name: Ruff lint
         working-directory: xian-tg-bot
-        run: poetry run ruff check .
+        run: uv run ruff check .
 
       - name: Run mypy
         working-directory: xian-tg-bot
-        run: poetry run mypy
+        run: uv run mypy
 
       - name: Run tests
         working-directory: xian-tg-bot
-        run: poetry run pytest
+        run: uv run pytest
