@@ -89,7 +89,7 @@ class Send(TGBFPlugin):
 
         # Check if recipient is a contract
         if to.startswith('con_'):
-            contract_data = await xian.get_contract(to)
+            contract_data = await xian.get_contract_source(to)
 
             if not contract_data:
                 msg = f"{con.ERROR} Contract doesn't exist!"
