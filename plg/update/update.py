@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext, MessageHandler, filters
 
 import constants as con
 import utils as utl
+from plg.update.safe_zip import safe_extract_plugin_zip
 from plugin import TGBFPlugin
 
 
@@ -77,7 +78,7 @@ class Update(TGBFPlugin):
 
                 with ZipFile(zip_path, 'r') as zip_file:
                     the_path = Path(con.DIR_PLG / plugin_name)
-                    zip_file.extractall(the_path)
+                    safe_extract_plugin_zip(zip_file, the_path)
             else:
                 the_path = Path(con.DIR_PLG / plugin_name / name)
                 await file.download_to_drive(the_path)
