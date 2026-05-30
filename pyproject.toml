@@ -4,7 +4,7 @@ version = "0.2.3"
 description = "Xian Network Telegram Bot"
 authors = [{ name = "endogen" }]
 readme = "README.md"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.14"
 dependencies = [
     "aiohttp>=3.13.5,<4",
     "aiosqlite>=0.22.1,<0.23",
