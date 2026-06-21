@@ -166,3 +166,4 @@ log/
 dat
 bck
 .DS_Store
+graphify-out/
