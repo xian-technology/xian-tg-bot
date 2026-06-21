@@ -100,7 +100,7 @@ Global settings (`cfg/global.json`):
   "webserver_port": 5000,
   "xian": {
     "node": "http://127.0.0.1:26657",
-    "explorer": "https://explorer.xian.org",
+    "explorer": "http://127.0.0.1:8080",
     "chain_id": "your-chain-id"
   }
 }

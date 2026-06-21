@@ -2,9 +2,9 @@
     "admin_tg_id": 134166731,
     "webserver_port": 5001,
     "xian": {
-        "node": "http://node.xian.org",
-        "graph_ql": "https://node.xian.org/graphql",
-        "explorer": "https://explorer.xian.org",
-        "chain_id": "xian-1"
+        "node": "http://127.0.0.1:26657",
+        "graph_ql": "http://127.0.0.1:5000/graphql",
+        "explorer": "http://127.0.0.1:8080",
+        "chain_id": "xian-local-1"
     }
 }

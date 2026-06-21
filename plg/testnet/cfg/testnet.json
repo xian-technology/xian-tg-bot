@@ -2,9 +2,9 @@
     "category": "Xian",
     "description": "Claim testnet XIAN",
     "privkey": "15dba1776668fd1e60931b80218cb637c0289eb0584c4c150895e2e8f600d907",
-    "testnet_node": "https://testnet.xian.org",
-    "explorer": "https://testnet-explorer.xian.org",
-    "chain_id": "xian-testnet-12",
+    "testnet_node": "http://127.0.0.1:26657",
+    "explorer": "http://127.0.0.1:8080",
+    "chain_id": "xian-testnet-1",
     "days_waiting": 1,
     "threshold": 20,
     "amount": 100
