@@ -115,6 +115,7 @@ class TelegramBot:
             # Init webserver
             self.web = WebAppWrapper(
                 res_path=con.DIR_RES,
+                host=self.cfg.get('webserver_host', default='0.0.0.0'),
                 port=self.cfg.get('webserver_port')
             )
 

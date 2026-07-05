@@ -7,9 +7,10 @@ from starlette.responses import FileResponse
 
 class WebAppWrapper:
 
-    def __init__(self, res_path: Path, port: int = 5000):
+    def __init__(self, res_path: Path, host: str = "0.0.0.0", port: int = 5000):
         self.router = APIRouter()
         self.res_path = res_path
+        self.host = host
         self.port = port
         self.app = None
         self.srv = None
@@ -25,7 +26,7 @@ class WebAppWrapper:
         async def root(): return FileResponse(self.res_path / 'root.html')
 
         self.srv = uvicorn.Server(
-            uvicorn.Config(self.app, host='0.0.0.0', port=self.port)
+            uvicorn.Config(self.app, host=self.host, port=self.port)
         )
 
         return self.srv
