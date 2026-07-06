@@ -3,26 +3,88 @@ import gc
 import json
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 import websockets
-from xian_py.encoding import decode_str
+from xian_py.transaction import decode_str
 
 from plugin import TGBFPlugin
 
 
+@dataclass(frozen=True)
+class TxEventResult:
+    tx_hashes: list[str]
+    success: bool
+    result: Any
+
+
+def _decode_event_result(data: Any) -> dict[str, Any]:
+    if isinstance(data, dict):
+        return data
+    if data in (None, ""):
+        return {}
+    decoded = decode_str(data)
+    payload = json.loads(decoded)
+    return payload if isinstance(payload, dict) else {}
+
+
+def parse_tx_event_message(msg: str) -> TxEventResult | None:
+    msg_json = json.loads(msg)
+
+    if not msg_json.get('result'):
+        return None
+
+    tx_hash_from_event = msg_json['result']['events'].get('tx.hash', [])
+    if not isinstance(tx_hash_from_event, list):
+        tx_hash_from_event = [tx_hash_from_event]
+
+    data = msg_json['result']['data']['value']['TxResult']['result']['data']
+    decoded_data = _decode_event_result(data)
+    status = decoded_data.get('status')
+    result = decoded_data.get('result', 'None')
+
+    success = True if status == 0 else False
+    result_data = ' ' if result == 'None' else result
+
+    return TxEventResult(
+        tx_hashes=tx_hash_from_event,
+        success=success,
+        result=result_data,
+    )
+
+
+def is_websocket_open(ws: Any) -> bool:
+    closed = getattr(ws, "closed", None)
+    if closed is not None:
+        return not bool(closed)
+
+    state = getattr(ws, "state", None)
+    if state is None:
+        return True
+
+    state_name = getattr(state, "name", None)
+    if state_name is not None:
+        return state_name == "OPEN"
+
+    return state == 1
+
+
 class Event(TGBFPlugin):
-    # Key = Tx hash, Value = Callable - function to call
-    execute = dict()
-    # Store futures for transaction waiting
-    futures: dict[str, asyncio.Future] = dict()
-    # Store pending transactions during reconnection
-    pending_tx: dict[str, tuple[str, Callable | None, bool, int]] = dict()
-    event = ''
-    # Connection status
-    is_connected = False
-    last_message = 0
-    ws_task = None
-    ws = None
+    def __init__(self, tgb):
+        super().__init__(tgb)
+        # Key = Tx hash, Value = Callable - function to call
+        self.execute: dict[str, Callable | None] = dict()
+        # Store futures for transaction waiting
+        self.futures: dict[str, asyncio.Future] = dict()
+        # Store pending transactions during reconnection
+        self.pending_tx: dict[str, tuple[str, Callable | None, bool, int]] = dict()
+        self.event = ''
+        # Connection status
+        self.is_connected = False
+        self.last_message = 0
+        self.ws_task = None
+        self.ws = None
 
     async def init(self):
         self.event = self.cfg.get('event')
@@ -36,7 +98,7 @@ class Event(TGBFPlugin):
 
     async def check_connection(self, context):
         """Actively check connection health"""
-        if self.is_connected and self.ws and not self.ws.closed:
+        if self.is_connected and self.ws and is_websocket_open(self.ws):
             try:
                 # Send a ping frame to verify connection
                 ping_task = asyncio.create_task(self.ws.ping())
@@ -93,9 +155,10 @@ class Event(TGBFPlugin):
                 # Resubscribe to any pending transactions
                 if self.pending_tx:
                     self.log.info(f"Resubscribing to {len(self.pending_tx)} pending transactions")
-                    for tx_hash, (tx_hash, func, wait, timeout) in self.pending_tx.items():
-                        await self.track_tx(tx_hash, func, wait, timeout)
+                    pending = list(self.pending_tx.items())
                     self.pending_tx.clear()
+                    for tx_hash, (_, func, wait, timeout) in pending:
+                        await self.track_tx(tx_hash, func, wait, timeout)
 
                 # Reset retry attempts on successful connection
                 retry_attempts = 0
@@ -153,23 +216,15 @@ class Event(TGBFPlugin):
         self.log.info(f'Event {self.event}: {msg}')
 
         try:
-            msg_json = json.loads(msg)
-
-            if not msg_json.get('result'):
+            tx_event = parse_tx_event_message(msg)
+            if tx_event is None:
                 return
 
-            # Get transaction hash from event - this could be a string or list
-            tx_hash_from_event = msg_json['result']['events'].get('tx.hash', [])
-
-            # Convert to list if it's not already
-            if not isinstance(tx_hash_from_event, list):
-                tx_hash_from_event = [tx_hash_from_event]
-
-            self.log.debug(f'Transaction hashes in event: {tx_hash_from_event}')
+            self.log.debug(f'Transaction hashes in event: {tx_event.tx_hashes}')
             self.log.debug(f'Tracked transactions: {list(self.execute.keys())}')
 
             # Normalize all hashes to uppercase for comparison
-            tx_hash_from_event_upper = [h.upper() for h in tx_hash_from_event]
+            tx_hash_from_event_upper = [h.upper() for h in tx_event.tx_hashes]
 
             for tx_hash in list(self.execute.keys()):
                 # Normalize to uppercase for comparison
@@ -179,15 +234,10 @@ class Event(TGBFPlugin):
                     self.log.debug(f'Found matching transaction: {tx_hash}')
 
                     try:
-                        data = msg_json['result']['data']['value']['TxResult']['result']['data']
-                        decoded_data = json.loads(decode_str(data))
-                        status = decoded_data.get('status')
-                        result = decoded_data.get('result', 'None')
-
-                        success = True if status == 0 else False
-                        result_data = ' ' if result == 'None' else result
-
-                        self.log.debug(f'Transaction result: success={success}, result={result_data}')
+                        self.log.debug(
+                            f'Transaction result: success={tx_event.success}, '
+                            f'result={tx_event.result}'
+                        )
 
                         # If there's a callback function, execute it
                         if self.execute[tx_hash]:
@@ -196,18 +246,18 @@ class Event(TGBFPlugin):
                             if asyncio.iscoroutinefunction(callback):
                                 # If it's an async function, await it
                                 self.log.debug(f'Executing async callback for {tx_hash}')
-                                await callback(success=success, result=result_data)
+                                await callback(success=tx_event.success, result=tx_event.result)
                             else:
                                 # If it's a regular function, just call it
                                 self.log.debug(f'Executing sync callback for {tx_hash}')
-                                callback(success=success, result=result_data)
+                                callback(success=tx_event.success, result=tx_event.result)
 
                         # If there's a future for this transaction, set its result
                         if tx_hash in self.futures:
                             future = self.futures[tx_hash]
                             if not future.done():
                                 self.log.debug(f'Setting future result for {tx_hash}')
-                                future.set_result((success, result_data))
+                                future.set_result((tx_event.success, tx_event.result))
                             del self.futures[tx_hash]
 
                         del self.execute[tx_hash]

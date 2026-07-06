@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import os
@@ -6,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
-from typing import Any, BinaryIO, ClassVar
+from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar
 
 import aiohttp
 import aiosqlite
@@ -22,7 +24,9 @@ from xian_py.wallet import Wallet
 import constants as c
 import utils as utl
 from config import ConfigError, ConfigManager
-from main import TelegramBot
+
+if TYPE_CHECKING:
+    from main import TelegramBot
 
 
 @dataclass(slots=True, frozen=True)

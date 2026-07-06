@@ -134,6 +134,7 @@ expectations.
 uv run pytest                # async test suite
 uv run ruff check .          # lint
 uv run mypy .                # type check
+uv run python scripts/tx_smoke.py --rpc-url http://127.0.0.1:26657 --chain-id xian-localnet-1 --private-key "$FUNDED_LOCAL_PRIVATE_KEY"
 uv run python main.py        # launch with current config
 ```
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import websockets
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-from xian_py.encoding import decode_str
+from xian_py.transaction import decode_str
 
 import constants as con
 import utils as utl

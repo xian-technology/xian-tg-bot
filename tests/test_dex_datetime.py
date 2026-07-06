@@ -35,7 +35,6 @@ class _TGBFPlugin:
 
 plugin_module = types.ModuleType("plugin")
 setattr(plugin_module, "TGBFPlugin", _TGBFPlugin)
-sys.modules.setdefault("plugin", plugin_module)
 
 
 def _swap_event(created: str) -> dict[str, Any]:
@@ -57,8 +56,16 @@ def _recent_z_timestamp() -> str:
 
 
 def _load_plugins() -> tuple[Any, Any]:
-    from plg.chart.chart import Chart
-    from plg.price.price import Price
+    previous_plugin_module = sys.modules.get("plugin")
+    sys.modules["plugin"] = plugin_module
+    try:
+        from plg.chart.chart import Chart
+        from plg.price.price import Price
+    finally:
+        if previous_plugin_module is None:
+            sys.modules.pop("plugin", None)
+        else:
+            sys.modules["plugin"] = previous_plugin_module
 
     return Chart, Price
 
