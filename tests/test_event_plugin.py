@@ -60,11 +60,6 @@ def test_parse_tx_event_message_handles_single_hash_and_failure() -> None:
     assert parsed.result == "insufficient balance"
 
 
-def test_is_websocket_open_supports_legacy_closed_attribute() -> None:
-    assert is_websocket_open(SimpleNamespace(closed=False)) is True
-    assert is_websocket_open(SimpleNamespace(closed=True)) is False
-
-
 def test_is_websocket_open_supports_websockets_16_state_attribute() -> None:
     assert is_websocket_open(SimpleNamespace(state=SimpleNamespace(name="OPEN"))) is True
     assert is_websocket_open(SimpleNamespace(state=SimpleNamespace(name="CLOSED"))) is False

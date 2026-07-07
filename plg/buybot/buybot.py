@@ -84,10 +84,6 @@ class Buybot(TGBFPlugin):
             if min_value is not None:
                 chat_entry["min_value"] = min_value
 
-            # If no special attributes, just use chat_id for backward compatibility
-            if not thread_id and min_value is None:
-                chat_entry = chat_id
-
             # Check if chat is already in the watched chats
             is_watched = False
             existing_index = -1
@@ -97,10 +93,6 @@ class Buybot(TGBFPlugin):
                         is_watched = True
                         existing_index = i
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    is_watched = True
-                    existing_index = i
-                    break
 
             # Add or update current chat/thread in watched chats
             if not is_watched:
@@ -112,11 +104,7 @@ class Buybot(TGBFPlugin):
             else:
                 # Update existing entry with new min_value if provided
                 if min_value is not None:
-                    if isinstance(self.watched_chats[existing_index], dict):
-                        self.watched_chats[existing_index]["min_value"] = min_value
-                    else:
-                        # Convert simple chat_id to dict format
-                        self.watched_chats[existing_index] = {"chat_id": chat_id, "min_value": min_value}
+                    self.watched_chats[existing_index]["min_value"] = min_value
                     self.cfg.set(self.watched_chats, "watched_chats")
                     await update.message.reply_text(f"{con.DONE} Updated minimum value to {min_value} XIAN for this " +
                                                     ("topic" if thread_id else "chat"))
@@ -133,10 +121,6 @@ class Buybot(TGBFPlugin):
                         self.watched_chats.pop(i)
                         removed = True
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    self.watched_chats.pop(i)
-                    removed = True
-                    break
 
             if removed:
                 await update.message.reply_text(f"{con.DONE} Buy-bot stopped in this " +
@@ -165,11 +149,6 @@ class Buybot(TGBFPlugin):
                         self.watched_chats[i]["min_value"] = min_value
                         updated = True
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    # Convert simple chat_id to dict format
-                    self.watched_chats[i] = {"chat_id": chat_id, "min_value": min_value}
-                    updated = True
-                    break
 
             if updated:
                 self.cfg.set(self.watched_chats, "watched_chats")
@@ -187,9 +166,6 @@ class Buybot(TGBFPlugin):
                     if existing_entry.get("thread_id") == thread_id:
                         min_value = existing_entry.get("min_value")
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    min_value = None  # Old format doesn't have min_value
-                    break
 
             if min_value is not None:
                 await update.message.reply_text("Minimum value for this " +
@@ -208,9 +184,6 @@ class Buybot(TGBFPlugin):
                         is_active = True
                         min_value = existing_entry.get("min_value")
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    is_active = True
-                    break
 
             status = f"{con.GREEN} Active" if is_active else f"{con.RED} Inactive"
             contracts = ", ".join(self.watched_contracts)
@@ -287,14 +260,6 @@ class Buybot(TGBFPlugin):
                             self.watched_chats[i]["allowed_tokens"].append(token_symbol)
                             updated = True
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    # Convert simple chat_id to dict format and add token filter
-                    self.watched_chats[i] = {
-                        "chat_id": chat_id,
-                        "allowed_tokens": [token_symbol]
-                    }
-                    updated = True
-                    break
 
             if updated:
                 self.cfg.set(self.watched_chats, "watched_chats")
@@ -318,9 +283,6 @@ class Buybot(TGBFPlugin):
                             allowed_tokens.remove(token_symbol)
                             updated = True
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    # No token filtering on simple chat_id entries
-                    pass
 
             if updated:
                 self.cfg.set(self.watched_chats, "watched_chats")
@@ -337,9 +299,6 @@ class Buybot(TGBFPlugin):
                     if existing_entry.get("thread_id") == thread_id:
                         allowed_tokens = existing_entry.get("allowed_tokens")
                         break
-                elif existing_entry == chat_id and not thread_id:
-                    allowed_tokens = None  # No filtering
-                    break
 
             if allowed_tokens:
                 token_list = ", ".join(allowed_tokens)
@@ -803,19 +762,10 @@ class Buybot(TGBFPlugin):
             # Send to all watched chats
             for chat_entry in self.watched_chats:
                 try:
-                    # Check if this is a chat_id or a dict with chat_id and thread_id
-                    chat_id = None
-                    thread_id = None
-                    min_value = None
-                    allowed_tokens = None
-
-                    if isinstance(chat_entry, dict):
-                        chat_id = chat_entry.get("chat_id")
-                        thread_id = chat_entry.get("thread_id")
-                        min_value = chat_entry.get("min_value")
-                        allowed_tokens = chat_entry.get("allowed_tokens")
-                    else:
-                        chat_id = chat_entry
+                    chat_id = chat_entry.get("chat_id")
+                    thread_id = chat_entry.get("thread_id")
+                    min_value = chat_entry.get("min_value")
+                    allowed_tokens = chat_entry.get("allowed_tokens")
 
                     # Check minimum value threshold
                     if min_value is not None and xian_amount < min_value:

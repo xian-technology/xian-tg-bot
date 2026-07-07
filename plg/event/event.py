@@ -55,10 +55,6 @@ def parse_tx_event_message(msg: str) -> TxEventResult | None:
 
 
 def is_websocket_open(ws: Any) -> bool:
-    closed = getattr(ws, "closed", None)
-    if closed is not None:
-        return not bool(closed)
-
     state = getattr(ws, "state", None)
     if state is None:
         return True
