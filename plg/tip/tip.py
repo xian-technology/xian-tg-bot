@@ -5,6 +5,7 @@ from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Tip(TGBFPlugin):
@@ -99,10 +100,6 @@ class Tip(TGBFPlugin):
 
         await message.edit_text(f"{con.WAIT} Sending...")
 
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
-
         try:
             # Send token
             send = await xian.send(amount, to_address, token=contract)
@@ -114,9 +111,9 @@ class Tip(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        tx_hash = send['tx_hash']
+        tx_hash = send.tx_hash
 
-        if send['success']:
+        if submission_accepted(send):
             async def tx_result(success: str, result: str):
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
@@ -131,6 +128,6 @@ class Tip(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.STOP} {result}")
 
-            await event_plugin.track_tx(tx_hash, tx_result)
+            await self.confirm_tx(xian, send, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {send['message']}")
+            await message.edit_text(f"{con.STOP} {send.message}")

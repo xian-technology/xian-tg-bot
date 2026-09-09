@@ -1,40 +1,9 @@
-import sys
-import types
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any
 
 import pytest
 
 from utils import parse_utc_datetime, utc_now
-
-_F = TypeVar("_F", bound=Callable[..., Any])
-
-
-def _identity_decorator() -> Callable[[_F], _F]:
-    return lambda fn: fn
-
-
-class _TGBFPlugin:
-    @staticmethod
-    def logging() -> Callable[[_F], _F]:
-        return _identity_decorator()
-
-    @staticmethod
-    def send_typing() -> Callable[[_F], _F]:
-        return _identity_decorator()
-
-    @staticmethod
-    def whitelist() -> Callable[[_F], _F]:
-        return _identity_decorator()
-
-    @staticmethod
-    def blacklist() -> Callable[[_F], _F]:
-        return _identity_decorator()
-
-
-plugin_module = types.ModuleType("plugin")
-setattr(plugin_module, "TGBFPlugin", _TGBFPlugin)
 
 
 def _swap_event(created: str) -> dict[str, Any]:
@@ -56,16 +25,8 @@ def _recent_z_timestamp() -> str:
 
 
 def _load_plugins() -> tuple[Any, Any]:
-    previous_plugin_module = sys.modules.get("plugin")
-    sys.modules["plugin"] = plugin_module
-    try:
-        from plg.chart.chart import Chart
-        from plg.price.price import Price
-    finally:
-        if previous_plugin_module is None:
-            sys.modules.pop("plugin", None)
-        else:
-            sys.modules["plugin"] = previous_plugin_module
+    from plg.chart.chart import Chart
+    from plg.price.price import Price
 
     return Chart, Price
 
@@ -84,7 +45,7 @@ def test_parse_utc_datetime_normalizes_z_naive_and_offsets() -> None:
 
 def test_price_24h_volume_accepts_z_timestamps() -> None:
     _, Price = _load_plugins()
-    plugin = Price()
+    plugin = Price.__new__(Price)
 
     volume = plugin.calculate_24h_volume_from_trades(
         [_swap_event(_recent_z_timestamp())],
@@ -96,7 +57,7 @@ def test_price_24h_volume_accepts_z_timestamps() -> None:
 
 def test_price_candles_accept_z_timestamps() -> None:
     _, Price = _load_plugins()
-    plugin = Price()
+    plugin = Price.__new__(Price)
 
     candles = plugin.process_swap_events(
         [_swap_event(_recent_z_timestamp())],
@@ -111,7 +72,7 @@ def test_price_candles_accept_z_timestamps() -> None:
 
 def test_chart_candles_accept_z_timestamps() -> None:
     Chart, _ = _load_plugins()
-    plugin = Chart()
+    plugin = Chart.__new__(Chart)
 
     candles = plugin.process_swap_events(
         [_swap_event(_recent_z_timestamp())],

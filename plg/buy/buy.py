@@ -5,6 +5,7 @@ from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 import constants as con
 import utils as utl
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Buy(TGBFPlugin):
@@ -180,10 +181,6 @@ class Buy(TGBFPlugin):
 
         message = update.effective_message
 
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
-
         try:
             approved_amount = await xian.get_approved_amount(contract, token=sell_contract)
             self.log.debug(f'Approved amount: {approved_amount}')
@@ -205,14 +202,11 @@ class Buy(TGBFPlugin):
                 await message.edit_text(f"{con.ERROR} {e}")
                 return
 
-            tx_hash = approve['tx_hash']
+            tx_hash = approve.tx_hash
 
-            if approve['success']:
+            if submission_accepted(approve):
                 try:
-                    success, result = await event_plugin.track_tx(
-                        tx_hash,
-                        wait=True
-                    )
+                    success, result = await self.confirm_tx(xian, approve)
                     if not success:
                         await message.edit_text(f"{con.ERROR} Approval failed: {result}")
                         return
@@ -220,7 +214,7 @@ class Buy(TGBFPlugin):
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await message.edit_text(f"{con.ERROR} {approve['message']}")
+                await message.edit_text(f"{con.ERROR} {approve.message}")
                 return
 
         try:
@@ -242,9 +236,9 @@ class Buy(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        tx_hash = buy['tx_hash']
+        tx_hash = buy.tx_hash
 
-        if buy['success']:
+        if submission_accepted(buy):
             async def tx_result(success: str, result: str):
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
@@ -270,9 +264,9 @@ class Buy(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.ERROR} {result}")
 
-            await event_plugin.track_tx(tx_hash, tx_result)
+            await self.confirm_tx(xian, buy, tx_result)
         else:
-            await message.edit_text(f"{con.ERROR} {buy['message']}")
+            await message.edit_text(f"{con.ERROR} {buy.message}")
 
         if amount.is_integer:
             amount = int(amount)

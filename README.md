@@ -24,10 +24,16 @@ flowchart LR
 ## Quick Start
 
 ```bash
-git clone https://github.com/xian-network/tg-bot.git
-cd tg-bot
+git clone https://github.com/xian-technology/xian-contracting.git
+git clone https://github.com/xian-technology/xian-py.git
+git clone https://github.com/xian-technology/xian-tg-bot.git
+cd xian-tg-bot
 uv sync
 ```
+
+Keep these repositories as siblings: the bot uses the current SDK, account,
+and runtime type packages from those checkouts. It requires `xian-tech-py`
+0.5.x and Python 3.14.
 
 Create a `.env`:
 
@@ -133,10 +139,17 @@ expectations.
 ```bash
 uv run pytest                # async test suite
 uv run ruff check .          # lint
-uv run mypy .                # type check
+uv run mypy                  # configured type-check scope
 uv run python scripts/tx_smoke.py --rpc-url http://127.0.0.1:26657 --chain-id xian-localnet-1 --private-key "$FUNDED_LOCAL_PRIVATE_KEY"
 uv run python main.py        # launch with current config
 ```
+
+Transaction commands read typed SDK submissions and confirm execution by
+transaction hash before reporting success. Confirmation timeout messages retain
+the hash because an accepted transaction may still complete. The bot shares an
+HTTP session across SDK clients and closes it during shutdown. Chart image
+rendering with Kaleido 1.x requires Chrome; install it with
+`uv run plotly_get_chrome` before enabling chart commands.
 
 ## Updating
 

@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 import constants as con
 import utils as utl
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Lottery(TGBFPlugin):
@@ -103,10 +104,6 @@ class Lottery(TGBFPlugin):
             )
             return
 
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
-
         try:
             approved_amount = await xian.get_approved_amount(lottery_contract, token=token_contract)
             self.log.debug(f'approved amount: {approved_amount}')
@@ -128,14 +125,11 @@ class Lottery(TGBFPlugin):
                 await update.message.reply_text(f"{con.ERROR} {e}")
                 return
 
-            tx_hash = approve['tx_hash']
+            tx_hash = approve.tx_hash
 
-            if approve['success']:
+            if submission_accepted(approve):
                 try:
-                    success, result = await event_plugin.track_tx(
-                        tx_hash,
-                        wait=True
-                    )
+                    success, result = await self.confirm_tx(xian, approve)
                     if not success:
                         await update.message.reply_text(f"{con.ERROR} Approval failed: {result}")
                         return
@@ -143,7 +137,7 @@ class Lottery(TGBFPlugin):
                     await update.message.reply_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await update.message.reply_text(f"{con.ERROR} {approve['message']}")
+                await update.message.reply_text(f"{con.ERROR} {approve.message}")
                 return
 
         kwargs = {
@@ -163,7 +157,7 @@ class Lottery(TGBFPlugin):
             await update.message.reply_text(f"{con.ERROR} {e}")
             return
 
-        tx_hash = send['tx_hash']
+        tx_hash = send.tx_hash
 
         async def tx_result(success: str, result: str):
             if success:
@@ -190,7 +184,7 @@ class Lottery(TGBFPlugin):
                        f'By pressing the button "Participate!" you take part in the lottery '
                        f'and have a chance to win the deposited amount!')
 
-                self.kv_set(str(lottery_id), msg)
+                await self.kv_set(str(lottery_id), msg)
 
                 banner = os.path.join(self.get_res_path(), "banner.jpg")
 
@@ -204,10 +198,10 @@ class Lottery(TGBFPlugin):
                 await update.message.reply_text(f"{con.ERROR} {result}")
                 return
 
-        if send['success']:
-            await event_plugin.track_tx(tx_hash, tx_result)
+        if submission_accepted(send):
+            await self.confirm_tx(xian, send, tx_result)
         else:
-            await update.message.reply_text(f"{con.ERROR} {send['message']}")
+            await update.message.reply_text(f"{con.ERROR} {send.message}")
             return
 
     def lottery_buttons(self, lottery_id: int):
@@ -250,11 +244,7 @@ class Lottery(TGBFPlugin):
 
         # Save wallet address and username / first name
         # Since we don't have that combination of data otherwise
-        self.kv_set(wallet.public_key, username)
-
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
+        await self.kv_set(wallet.public_key, username)
 
         # PARTICIPATE in lottery
         if lottery_command == 'add':
@@ -266,7 +256,7 @@ class Lottery(TGBFPlugin):
                 )
                 self.log.debug(f'Lottery Register TX: {send}')
 
-                tx_hash = send['tx_hash']
+                tx_hash = send.tx_hash
                 explorer_url = self.cfg_global.get('xian', 'explorer')
                 link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
@@ -278,9 +268,9 @@ class Lottery(TGBFPlugin):
                         )
                         await self.remove_msg_after(reply_msg, after_secs=10)
 
-                        old_msg = self.kv_get(str(lottery_id))
+                        old_msg = await self.kv_get(str(lottery_id))
                         new_msg = self.update_user_pool(old_msg)
-                        self.kv_set(str(lottery_id), new_msg)
+                        await self.kv_set(str(lottery_id), new_msg)
 
                         await update.callback_query.message.edit_caption(
                             new_msg,
@@ -296,16 +286,16 @@ class Lottery(TGBFPlugin):
 
                         return
 
-                if send['success']:
-                    await event_plugin.track_tx(tx_hash, tx_result)
+                if submission_accepted(send):
                     await context.bot.answer_callback_query(
                         update.callback_query.id,
                         f"{con.STARS} Transaction sent..."
                     )
+                    await self.confirm_tx(xian, send, tx_result)
                 else:
                     error_msg = await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not add {username} to the lottery: '
-                        f'<code>{send["message"]}</code>.',
+                        f'<code>{send.message}</code>.',
                         disable_web_page_preview=True
                     )
                     await self.remove_msg_after(error_msg, after_secs=10)
@@ -333,7 +323,7 @@ class Lottery(TGBFPlugin):
                 )
                 self.log.debug(f'Lottery End TX: {send}')
 
-                tx_hash = send['tx_hash']
+                tx_hash = send.tx_hash
                 explorer_url = self.cfg_global.get('xian', 'explorer')
                 link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
@@ -341,7 +331,7 @@ class Lottery(TGBFPlugin):
                     if success:
                         result = result.replace("'", '')
                         winner_address = result.replace('Winner ', '')
-                        winner_username = self.kv_get(winner_address)
+                        winner_username = await self.kv_get(winner_address)
 
                         if winner_username:
                             winner = winner_username
@@ -367,16 +357,16 @@ class Lottery(TGBFPlugin):
 
                         return
 
-                if send['success']:
-                    await event_plugin.track_tx(tx_hash, tx_result)
+                if submission_accepted(send):
                     await context.bot.answer_callback_query(
                         update.callback_query.id,
                         f"{con.STARS} Transaction sent..."
                     )
+                    await self.confirm_tx(xian, send, tx_result)
                 else:
                     error_msg = await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not end the lottery: '
-                        f'<code>{send["message"]}</code>.',
+                        f'<code>{send.message}</code>.',
                         disable_web_page_preview=True
                     )
                     await self.remove_msg_after(error_msg, after_secs=10)

@@ -6,6 +6,7 @@ from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Rain(TGBFPlugin):
@@ -192,10 +193,6 @@ class Rain(TGBFPlugin):
             "contract": contract
         }
 
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
-
         try:
             approved_amount = await xian.get_approved_amount(multisend_contract, token=contract)
             self.log.debug(f'Approved amount: {approved_amount}')
@@ -212,7 +209,7 @@ class Rain(TGBFPlugin):
                 approve = await xian.approve(multisend_contract, token=contract)
                 self.log.debug(f'Approve: {approve}')
 
-                if not approve['success']:
+                if not submission_accepted(approve):
                     await message.edit_text(f"{con.ERROR} Can not approve contract!")
                     return
             except Exception as e:
@@ -222,14 +219,11 @@ class Rain(TGBFPlugin):
                 await message.edit_text(f"{con.ERROR} {e}")
                 return
 
-            tx_hash = approve['tx_hash']
+            tx_hash = approve.tx_hash
 
-            if approve['success']:
+            if submission_accepted(approve):
                 try:
-                    success, result = await event_plugin.track_tx(
-                        tx_hash,
-                        wait=True
-                    )
+                    success, result = await self.confirm_tx(xian, approve)
                     if not success:
                         await message.edit_text(f"{con.STOP} Approval failed: {result}")
                         return
@@ -237,7 +231,7 @@ class Rain(TGBFPlugin):
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await message.edit_text(f"{con.STOP} {approve['message']}")
+                await message.edit_text(f"{con.STOP} {approve.message}")
                 return
 
         try:
@@ -251,14 +245,11 @@ class Rain(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        tx_hash = send['tx_hash']
+        tx_hash = send.tx_hash
 
-        if send['success']:
+        if submission_accepted(send):
             try:
-                success, result = await event_plugin.track_tx(
-                    tx_hash,
-                    wait=True
-                )
+                success, result = await self.confirm_tx(xian, send)
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
                     link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
@@ -268,4 +259,4 @@ class Rain(TGBFPlugin):
             except TimeoutError:
                 await message.edit_text(f"{con.ERROR} Rain transaction timeout")
         else:
-            await message.edit_text(f"{con.STOP} {send['message']}")
+            await message.edit_text(f"{con.STOP} {send.message}")

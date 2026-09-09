@@ -1,13 +1,12 @@
-import asyncio
 from datetime import UTC, datetime, timedelta
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-from xian_py import XianAsync
 from xian_py.wallet import Wallet
 
 import constants as con
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Testnet(TGBFPlugin):
@@ -110,11 +109,16 @@ class Testnet(TGBFPlugin):
                 # Send testnet XIAN from faucet to user
                 send = await testnet.send(amount, user_address)
 
-                if not send["success"]:
-                    msg = f"CLAIM Error: {send['message']}"
+                if not submission_accepted(send):
+                    msg = f"CLAIM Error: {send.message}"
                     self.log.error(msg)
                     await self.notify(msg)
-                    await message.edit_text(f"{con.ERROR} Transaction failed: {send['message']}")
+                    await message.edit_text(f"{con.ERROR} Transaction failed: {send.message}")
+                    return
+
+                success, result = await self.confirm_tx(testnet, send)
+                if not success:
+                    await message.edit_text(f"{con.ERROR} Claim not confirmed: {result}")
                     return
 
                 self.log.debug(f'Claim TX: {send}')
@@ -128,7 +132,7 @@ class Testnet(TGBFPlugin):
             # Save claim time
             tz = UTC
             current_dt_str = datetime.now(tz=tz).strftime("%Y-%m-%dT%H:%M:%S")
-            self.kv_set(user_address, current_dt_str)
+            await self.kv_set(user_address, current_dt_str)
 
             await message.edit_text(
                 f"{con.INFO} Claimed {amount} tXIAN to your bot wallet"
@@ -181,13 +185,13 @@ class Testnet(TGBFPlugin):
                 await message.edit_text(f"{con.ERROR} {str(e)}")
                 return
 
-            tx_hash = send.get("tx_hash")
+            tx_hash = send.tx_hash
 
-            if send['success']:
+            if submission_accepted(send):
                 explorer_url = self.cfg.get('explorer')
                 link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-                success = await self.check_tx(await self.get_testnet_instance(), tx_hash)
+                success, result = await self.confirm_tx(testnet, send)
 
                 if success:
                     await message.edit_text(
@@ -196,35 +200,16 @@ class Testnet(TGBFPlugin):
                     )
                 else:
                     await message.edit_text(
-                        f"{con.ERROR} Something didn't work out",
+                        f"{con.ERROR} {result}",
                         disable_web_page_preview=True
                     )
             else:
-                await message.edit_text(f"{con.STOP} {send['message']}")
+                await message.edit_text(f"{con.STOP} {send.message}")
 
         except Exception as e:
             self.log.error(f"Unexpected error: {e}")
             await self.notify(e)
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
-
-    async  def check_tx(self, node: XianAsync, tx_hash: str, interval: int = 3, total: int = 9) -> bool:
-        waiting = 0
-
-        while waiting <= total:
-            await asyncio.sleep(interval)
-            waiting += interval
-
-            try:
-                tx = await node.get_tx(tx_hash)
-                if tx["success"]:
-                    return True
-            except Exception as e:
-                msg = f"GET_TX Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
-                return False
-
-        return False
 
     async def get_testnet_instance(self):
         """Get testnet instance with faucet wallet"""
@@ -236,7 +221,7 @@ class Testnet(TGBFPlugin):
         testnet = await self.get_xian(testnet_node, chain_id, from_wallet)
 
         if chain_id is None:
-            self.cfg.set('chain_id', testnet.chain_id)
+            self.cfg.set(testnet.chain_id, 'chain_id')
 
         return testnet
 
@@ -250,7 +235,7 @@ class Testnet(TGBFPlugin):
             raise ValueError(f"Your bot wallet already has more than {threshold} tXIAN")
 
         # Check last claim time
-        past_dt_str = self.kv_get(address)
+        past_dt_str = await self.kv_get(address)
         if past_dt_str:
             tz = UTC
             ft = "%Y-%m-%dT%H:%M:%S"

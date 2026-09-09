@@ -6,6 +6,7 @@ from telegram.ext import CallbackContext, MessageHandler, filters
 
 import constants as con
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Submit(TGBFPlugin):
@@ -60,10 +61,6 @@ class Submit(TGBFPlugin):
         from_wallet = await self.get_wallet(update.effective_user.id)
         xian = await self.get_xian(wallet=from_wallet)
 
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
-
         try:
             deploy = await xian.submit_contract(name, code)
             self.log.debug(f'Submit TX: {deploy}')
@@ -74,9 +71,9 @@ class Submit(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        tx_hash = deploy['tx_hash']
+        tx_hash = deploy.tx_hash
 
-        if deploy['success']:
+        if submission_accepted(deploy):
             async def tx_result(success: str, result: str):
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
@@ -89,6 +86,6 @@ class Submit(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.STOP} {result}")
 
-            await event_plugin.track_tx(tx_hash, tx_result)
+            await self.confirm_tx(xian, deploy, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {deploy['message']}")
+            await message.edit_text(f"{con.STOP} {deploy.message}")

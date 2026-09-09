@@ -1,5 +1,11 @@
 # Repository Guidelines
 
+## Validation
+- Install the sibling SDK dependencies with `uv sync --group dev`.
+- Run `uv run pytest`, `uv run ruff check .`, and `uv run mypy` before push.
+- `scripts/tx_smoke.py` is an optional live local-node check; use an explicitly funded local wallet.
+- Keep network defaults local. Current SDK integration uses typed submissions and receipts.
+
 ## Shared Agent Practices
 - Keep changes clean, modular, and professional. Prefer small, cohesive modules, clear naming, explicit boundaries, and tests over quick patches.
 - When code behavior, public APIs, user workflows, operator workflows, or configuration semantics change, check whether `../xian-docs-web` needs corresponding documentation updates. If this repo is `xian-docs-web`, update the relevant published docs in place. Write durable user/developer documentation, not a changelog entry.

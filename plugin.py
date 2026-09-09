@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
@@ -12,18 +13,19 @@ from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar
 
 import aiohttp
 import aiosqlite
-import pickledb
 from loguru import logger
 from pickledb import PickleDB
 from telegram import Chat, Message, Update
 from telegram.constants import ChatAction
 from telegram.ext import BaseHandler, CallbackContext, CallbackQueryHandler, Job
 from xian_py import XianAsync
+from xian_py.models import TransactionSubmission
 from xian_py.wallet import Wallet
 
 import constants as c
 import utils as utl
 from config import ConfigError, ConfigManager
+from transactions import confirm_submission
 
 if TYPE_CHECKING:
     from main import TelegramBot
@@ -351,7 +353,8 @@ class TGBFPlugin:
             data=data,
             name=name if name else (self.name + "_" + utl.random_id()))
 
-    def _get_kv(self, plugin="", db_name="") -> PickleDB:
+    @asynccontextmanager
+    async def _get_kv(self, plugin="", db_name="") -> AsyncIterator[PickleDB]:
         if db_name:
             if not db_name.lower().endswith(".kv"):
                 db_name += ".kv"
@@ -362,31 +365,39 @@ class TGBFPlugin:
                 db_name = self.name + ".kv"
 
         plugin = plugin if plugin else self.name
-        db_path = Path(self.get_dat_path(plugin=plugin) / db_name)
-        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path = await asyncio.to_thread(Path(self.get_dat_path(plugin=plugin) / db_name).resolve)
+        await asyncio.to_thread(db_path.parent.mkdir, parents=True, exist_ok=True)
 
-        return pickledb.load(db_path, True)
+        lock = self.tgb.kv_locks.setdefault(db_path, asyncio.Lock())
+        async with lock:
+            kv_db = PickleDB(str(db_path))
+            await kv_db.load()
+            yield kv_db
 
-    def kv_set(self, key, value, plugin="", db_name=""):
-        kv_db = self._get_kv(plugin, db_name)
-        return kv_db.set(key, value)
+    async def kv_set(self, key, value, plugin="", db_name=""):
+        async with self._get_kv(plugin, db_name) as kv_db:
+            result = await kv_db.set(key, value)
+            await kv_db.save()
+            return result
 
-    def kv_get(self, key, plugin="", db_name=""):
-        kv_db = self._get_kv(plugin, db_name)
-        return kv_db.get(key)
+    async def kv_get(self, key, plugin="", db_name=""):
+        async with self._get_kv(plugin, db_name) as kv_db:
+            return await kv_db.get(key)
 
-    def kv_all(self, plugin="", db_name=""):
-        kv_db = self._get_kv(plugin, db_name)
-        return kv_db.getall()
+    async def kv_all(self, plugin="", db_name=""):
+        async with self._get_kv(plugin, db_name) as kv_db:
+            return await kv_db.all()
 
-    def kv_del(self, key, plugin="", db_name="", is_prefix: bool = False):
-        kv_db = self._get_kv(plugin, db_name)
-        if is_prefix:
-            for entry in [k for k in kv_db.getall() if k.startswith(key)]:
-                kv_db.rem(entry)
-            kv_db.dump()
-        else:
-            return kv_db.rem(key)
+    async def kv_del(self, key, plugin="", db_name="", is_prefix: bool = False):
+        async with self._get_kv(plugin, db_name) as kv_db:
+            if is_prefix:
+                for entry in [k for k in await kv_db.all() if k.startswith(key)]:
+                    await kv_db.remove(entry)
+                result = None
+            else:
+                result = await kv_db.remove(key)
+            await kv_db.save()
+            return result
 
     async def fetch_graphql(
             self,
@@ -912,16 +923,26 @@ class TGBFPlugin:
     async def get_xian(self, node: str = None, chain_id: str = None, wallet: Wallet = None) -> XianAsync:
         """ Return a Xian Network node instance """
 
+        global_node = self.cfg_global.get('xian', 'node')
         if node is None:
-            node = self.cfg_global.get('xian', 'node')
-        if chain_id is None:
+            node = global_node
+        if chain_id is None and node == global_node:
             chain_id = self.cfg_global.get('xian', 'chain_id')
 
-        xian = XianAsync(node, chain_id, wallet)
+        xian = XianAsync(node, chain_id, wallet, session=await self.tgb.get_xian_session())
 
         if chain_id is None:
-            global_node = self.cfg_global.get('xian', 'node')
+            await xian.ensure_chain_id()
             if global_node == node:
                 self.cfg_global.set(xian.chain_id, 'xian', 'chain_id')
 
         return xian
+
+    async def confirm_tx(self, client: XianAsync, submission: TransactionSubmission,
+                         callback: Callable | None = None) -> tuple[bool, Any]:
+        result = await confirm_submission(client, submission)
+        if callback:
+            callback_result = callback(success=result[0], result=result[1])
+            if inspect.isawaitable(callback_result):
+                await callback_result
+        return result

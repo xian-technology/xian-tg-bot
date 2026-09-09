@@ -3,6 +3,7 @@ from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
 from plugin import TGBFPlugin
+from transactions import submission_accepted
 
 
 class Approve(TGBFPlugin):
@@ -40,10 +41,6 @@ class Approve(TGBFPlugin):
         wallet = await self.get_wallet(update.effective_user.id)
         xian = await self.get_xian(wallet=wallet)
 
-        event_plugin = self.plugins['event']
-        if not event_plugin.is_node_connected():
-            await event_plugin.force_reconnect()
-
         try:
             # Approve contract
             approve = await xian.approve(contract, token=token, amount=amount)
@@ -54,9 +51,9 @@ class Approve(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
-        tx_hash = approve['tx_hash']
+        tx_hash = approve.tx_hash
 
-        if approve['success']:
+        if submission_accepted(approve):
             async def tx_result(success: str, result: str):
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
@@ -69,6 +66,6 @@ class Approve(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.STOP} {result}")
 
-            await event_plugin.track_tx(tx_hash, tx_result)
+            await self.confirm_tx(xian, approve, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {approve['message']}")
+            await message.edit_text(f"{con.STOP} {approve.message}")

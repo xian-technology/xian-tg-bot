@@ -36,6 +36,16 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Checkout workspace validation tools
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/xian-meta
+          ref: main
+          path: xian-meta
+
+      - name: Report resolved workspace versions
+        run: python xian-meta/scripts/report_workspace_shas.py --workspace-root .
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
 

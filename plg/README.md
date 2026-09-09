@@ -82,10 +82,27 @@ The helpers wrap `aiosqlite` connections and commit automatically. Use `table_ex
 
 ### Key-Value Store
 ```python
-self.kv_set("key", {"value": 1})
-value = self.kv_get("key")
-self.kv_del("key")
+await self.kv_set("key", {"value": 1})
+value = await self.kv_get("key")
+await self.kv_del("key")
 ```
+
+All key-value helpers are asynchronous. Writes are explicitly saved, and access
+to each database is serialized across plugins within the bot process.
+
+### Transactions
+
+```python
+client = await self.get_xian(wallet=wallet)
+submission = await client.send(amount, recipient)
+success, result = await self.confirm_tx(client, submission)
+```
+
+SDK submissions and receipts are typed objects. CheckTx acceptance alone does
+not mean the transaction executed successfully. `confirm_tx` uses a supplied
+receipt or waits for one by hash; it never rebroadcasts. An optional callback
+receives `success` and `result` after confirmation. SDK clients use the bot's
+shared session, which is closed on shutdown.
 
 ### Resources
 Place templates or SQL under `res/`:

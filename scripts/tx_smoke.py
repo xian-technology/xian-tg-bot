@@ -79,6 +79,27 @@ async def wait_for_tx_event(
             }
 
 
+async def wait_for_event_ready(
+    event_task: asyncio.Task, ready: asyncio.Event, timeout: float,
+) -> None:
+    """Bound connection setup and propagate an early websocket failure."""
+    ready_task = asyncio.create_task(ready.wait())
+    try:
+        done, _ = await asyncio.wait(
+            {event_task, ready_task}, timeout=timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if event_task in done:
+            await event_task
+            if not ready.is_set():
+                raise RuntimeError("Websocket watcher stopped before becoming ready")
+        elif ready_task not in done:
+            raise TimeoutError("Timed out connecting transaction websocket")
+    finally:
+        ready_task.cancel()
+        await asyncio.gather(ready_task, return_exceptions=True)
+
+
 async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
     sender = Wallet(args.private_key)
     recipient = Wallet()
@@ -93,68 +114,73 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
 
-    await event_ready.wait()
+    try:
+        await wait_for_event_ready(event_task, event_ready, args.timeout_seconds)
 
-    async with XianAsync(args.rpc_url, args.chain_id, sender) as client:
-        await client.ensure_chain_id()
-        chain_id = client.chain_id
-        sender_before = normalize_balance(await client.get_balance(sender.public_key))
-        recipient_before = normalize_balance(await client.get_balance(recipient.public_key))
+        async with XianAsync(args.rpc_url, args.chain_id, sender) as client:
+            await client.ensure_chain_id()
+            chain_id = client.chain_id
+            sender_before = normalize_balance(await client.get_balance(sender.public_key))
+            recipient_before = normalize_balance(await client.get_balance(recipient.public_key))
 
-        submission = await client.send(
-            Decimal(args.amount),
-            recipient.public_key,
-            token="currency",
-            mode="checktx",
-            wait_for_tx=False,
-        )
-        if not submission.submitted or submission.accepted is not True or not submission.tx_hash:
-            raise RuntimeError(f"Transaction was not accepted: {submission}")
+            submission = await client.send(
+                Decimal(args.amount),
+                recipient.public_key,
+                token="currency",
+                mode="checktx",
+                wait_for_tx=False,
+            )
+            if not submission.submitted or submission.accepted is not True or not submission.tx_hash:
+                raise RuntimeError(f"Transaction was not accepted: {submission}")
 
-        tx_hash_future.set_result(submission.tx_hash)
-        receipt = await client.wait_for_tx(
-            submission.tx_hash,
-            timeout_seconds=args.timeout_seconds,
-            poll_interval_seconds=0.25,
-        )
-        lookup = await client.get_tx(submission.tx_hash)
-        event_result = await event_task
+            tx_hash_future.set_result(submission.tx_hash)
+            receipt = await client.wait_for_tx(
+                submission.tx_hash,
+                timeout_seconds=args.timeout_seconds,
+                poll_interval_seconds=0.25,
+            )
+            lookup = await client.get_tx(submission.tx_hash)
+            event_result = await event_task
 
-        recipient_after = normalize_balance(await client.get_balance(recipient.public_key))
-        sender_after = normalize_balance(await client.get_balance(sender.public_key))
+            recipient_after = normalize_balance(await client.get_balance(recipient.public_key))
+            sender_after = normalize_balance(await client.get_balance(sender.public_key))
 
-    amount = Decimal(args.amount)
-    if not receipt.success:
-        raise RuntimeError(f"wait_for_tx returned failed receipt: {receipt}")
-    if not lookup.success:
-        raise RuntimeError(f"get_tx returned failed receipt: {lookup}")
-    if not event_result["success"]:
-        raise RuntimeError(f"Tx event reported failure: {event_result}")
-    if recipient_after - recipient_before != amount:
-        raise RuntimeError(
-            "Recipient balance did not increase by expected amount: "
-            f"before={recipient_before} after={recipient_after} amount={amount}"
-        )
+        amount = Decimal(args.amount)
+        if not receipt.success:
+            raise RuntimeError(f"wait_for_tx returned failed receipt: {receipt}")
+        if not lookup.success:
+            raise RuntimeError(f"get_tx returned failed receipt: {lookup}")
+        if not event_result["success"]:
+            raise RuntimeError(f"Tx event reported failure: {event_result}")
+        if recipient_after - recipient_before != amount:
+            raise RuntimeError(
+                "Recipient balance did not increase by expected amount: "
+                f"before={recipient_before} after={recipient_after} amount={amount}"
+            )
 
-    return {
-        "ok": True,
-        "chain_id": chain_id,
-        "rpc_url": args.rpc_url,
-        "tx_hash": submission.tx_hash,
-        "sender": sender.public_key,
-        "recipient": recipient.public_key,
-        "amount": str(amount),
-        "sender_balance_before": str(sender_before),
-        "sender_balance_after": str(sender_after),
-        "recipient_balance_before": str(recipient_before),
-        "recipient_balance_after": str(recipient_after),
-        "submitted": submission.submitted,
-        "accepted": submission.accepted,
-        "receipt_success": receipt.success,
-        "lookup_success": lookup.success,
-        "event_success": event_result["success"],
-        "event_result": event_result["result"],
-    }
+        return {
+            "ok": True,
+            "chain_id": chain_id,
+            "rpc_url": args.rpc_url,
+            "tx_hash": submission.tx_hash,
+            "sender": sender.public_key,
+            "recipient": recipient.public_key,
+            "amount": str(amount),
+            "sender_balance_before": str(sender_before),
+            "sender_balance_after": str(sender_after),
+            "recipient_balance_before": str(recipient_before),
+            "recipient_balance_after": str(recipient_after),
+            "submitted": submission.submitted,
+            "accepted": submission.accepted,
+            "receipt_success": receipt.success,
+            "lookup_success": lookup.success,
+            "event_success": event_result["success"],
+            "event_result": event_result["result"],
+        }
+    finally:
+        if not event_task.done():
+            event_task.cancel()
+        await asyncio.gather(event_task, return_exceptions=True)
 
 
 def build_parser() -> argparse.ArgumentParser:

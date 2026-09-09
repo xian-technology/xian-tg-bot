@@ -5,11 +5,13 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import aiohttp
 from dotenv import load_dotenv
 from loguru import logger
 from telegram.constants import ParseMode
 from telegram.error import InvalidToken
 from telegram.ext import Application, Defaults
+from xian_py.config import TransportConfig
 
 import constants as con
 from config import ConfigManager
@@ -30,6 +32,23 @@ class TelegramBot:
         self.plugins = dict()
         self.plugin_manifests: dict[str, PluginManifest] = {}
         self._stopping = False
+        self._xian_session: aiohttp.ClientSession | None = None
+        self.kv_locks: dict[Path, asyncio.Lock] = {}
+
+    async def get_xian_session(self) -> aiohttp.ClientSession:
+        if self._xian_session is None or self._xian_session.closed:
+            transport = TransportConfig()
+            self._xian_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(
+                total=transport.total_timeout_seconds,
+                sock_connect=transport.connect_timeout_seconds,
+                sock_read=transport.read_timeout_seconds,
+            ))
+        return self._xian_session
+
+    async def close_xian_session(self):
+        if self._xian_session is not None:
+            await self._xian_session.close()
+            self._xian_session = None
 
     async def cancel_pending_tasks(self):
         """Cancel all pending tasks except the current one"""
@@ -97,6 +116,7 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
         finally:
+            await self.close_xian_session()
             logger.info("Shutdown coroutine finished")
 
     async def run(self, config: ConfigManager, token: str):

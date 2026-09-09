@@ -32,7 +32,8 @@ def _decode_event_result(data: Any) -> dict[str, Any]:
 def parse_tx_event_message(msg: str) -> TxEventResult | None:
     msg_json = json.loads(msg)
 
-    if not msg_json.get('result'):
+    event = msg_json.get('result')
+    if not isinstance(event, dict) or 'events' not in event or 'data' not in event:
         return None
 
     tx_hash_from_event = msg_json['result']['events'].get('tx.hash', [])
@@ -91,14 +92,20 @@ class Event(TGBFPlugin):
     async def cleanup(self):
         if self.ws_task:
             self.ws_task.cancel()
+            await asyncio.gather(self.ws_task, return_exceptions=True)
+        if self.ws:
+            await self.ws.close()
+        self.is_connected = False
+        await self.fail_all_pending("Event plugin stopped")
 
     async def check_connection(self, context):
         """Actively check connection health"""
         if self.is_connected and self.ws and is_websocket_open(self.ws):
             try:
                 # Send a ping frame to verify connection
-                ping_task = asyncio.create_task(self.ws.ping())
-                await asyncio.wait_for(ping_task, timeout=5.0)
+                async with asyncio.timeout(5):
+                    pong_waiter = await self.ws.ping()
+                    await pong_waiter
                 self.log.debug("Health check: Connection is healthy")
             except (TimeoutError, websockets.exceptions.ConnectionClosed):
                 self.log.warning("Health check: Connection failed, forcing reconnect...")
@@ -112,8 +119,8 @@ class Event(TGBFPlugin):
 
     async def websocket_loop(self):
         retry_attempts = 0
-        max_retries = self.cfg.get('max_retries', 10)
-        base_wait_time = self.cfg.get('base_wait_time', 2)
+        max_retries = self.cfg.get('max_retries', default=10)
+        base_wait_time = self.cfg.get('base_wait_time', default=2)
 
         while True:
             try:
@@ -207,6 +214,7 @@ class Event(TGBFPlugin):
             if not future.done():
                 future.set_result((False, reason))
             del self.futures[tx_hash]
+        self.pending_tx.clear()
 
     async def on_message(self, ws, msg):
         self.log.info(f'Event {self.event}: {msg}')
