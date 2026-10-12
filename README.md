@@ -176,3 +176,30 @@ suite before restarting.
 - [plg/README.md](plg/README.md) — plugin development patterns
 - `AGENTS.md` — contributor expectations
 - [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot) — underlying Telegram client
+
+## Existing hybrid user accounts
+
+Operators can set `XIAN_BOT_ACTIVE_BACKUP_DIR` and `XIAN_BOT_BACKUP_PASSWORD`.
+Store each enrolled user's encrypted active backup as `<original-address>.json`
+in that private directory. The stored SQLite address is verified and remains
+unchanged; no database rows, balances or user mappings are migrated. Existing
+legacy wallets without a file retain their current behavior. A present invalid,
+wrong-chain or recovery file is rejected without a legacy fallback. If an
+enrolled account's file is missing, its legacy transaction is rejected by the
+node; restore the current file or perform cold recovery before resuming.
+
+Back up SQLite and active custody files together, keep master backups offline,
+and never transmit recovery secrets through Telegram. New wallets remain legacy
+until an explicitly verified enrollment workflow is completed elsewhere. Pause
+the affected user's operations while rotating/recovering, install the confirmed
+active file atomically, then resume. Derive service credentials from verified master backups; never
+install master backups on the bot.
+
+The address view does not offer the legacy private-key export button for hybrid
+accounts. The faucet has separate `XIAN_BOT_FAUCET_ACTIVE_BACKUP_FILE` and
+`XIAN_BOT_FAUCET_BACKUP_PASSWORD` inputs; remove its configured legacy `privkey`
+when using them. Its backup must match the faucet's chain.
+
+The bot's app ZIP backup is not a complete hybrid custody backup. External
+active files, their passwords and offline master backups require separate
+verified backups; the backup command states this when hybrid custody is configured.

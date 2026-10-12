@@ -133,7 +133,12 @@ class Backup(TGBFPlugin):
                 with open(filepath, 'rb') as f:
                     await context.bot.send_document(
                         chat_id=update.effective_user.id,
-                        caption=f"{con.DONE} Backup created with {file_count} files",
+                        caption=(
+                            f"{con.DONE} App backup created with {file_count} files"
+                            + ("\nKeep verified hybrid active and offline recovery backups separately; "
+                               "this app archive is not a complete custody backup."
+                               if os.environ.get("XIAN_BOT_ACTIVE_BACKUP_DIR") else "")
+                        ),
                         document=f,
                         filename=filename,
                         read_timeout=30,  # Lower timeouts to fail faster if stuck

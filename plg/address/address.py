@@ -62,8 +62,9 @@ class Address(TGBFPlugin):
         else:
             segno.make_qr(wallet.public_key).save(b_out, border=1, scale=10, kind="png")
 
-        if self.is_private(update.message):
-            context.user_data["privkey"] = wallet.private_key
+        legacy_private_key = getattr(wallet, "private_key", None)
+        if self.is_private(update.message) and legacy_private_key is not None:
+            context.user_data["privkey"] = legacy_private_key
 
             await update.message.reply_photo(
                 photo=b_out.getvalue(),

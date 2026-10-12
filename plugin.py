@@ -904,7 +904,9 @@ class TGBFPlugin:
 
         # User already has a wallet
         if res["data"]:
-            return Wallet(res["data"][0][2])
+            from custody import user_wallet
+            row = res["data"][0]
+            return user_wallet(row[1], row[2], self.cfg_global.get('xian', 'chain_id'))
 
         # Create new wallet
         wallet = Wallet()

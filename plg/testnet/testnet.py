@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime, timedelta
 
 from telegram import Update
@@ -216,7 +217,14 @@ class Testnet(TGBFPlugin):
         testnet_node = self.cfg.get('testnet_node')
         chain_id = self.cfg.get('chain_id')
         from_privkey = self.cfg.get('privkey')
-        from_wallet = Wallet(from_privkey)
+        from xian_py.signers import load_signing_wallet
+        backup = os.environ.get("XIAN_BOT_FAUCET_ACTIVE_BACKUP_FILE")
+        from_wallet = load_signing_wallet(
+            private_key=from_privkey or None,
+            active_backup_file=backup,
+            backup_password=os.environ.get("XIAN_BOT_FAUCET_BACKUP_PASSWORD") if backup else None,
+            chain_id=chain_id,
+        )
 
         testnet = await self.get_xian(testnet_node, chain_id, from_wallet)
 
