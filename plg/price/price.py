@@ -5,6 +5,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 from utils import parse_utc_datetime, utc_now
 
@@ -198,7 +199,7 @@ class Price(TGBFPlugin):
 
         except Exception as e:
             await message.edit_text(f"{con.ERROR} Error fetching price: {e}")
-            self.log.error(f"Price error: {e}")
+            self.log.bind(**error_context(e), handler='price_callback').error('Price callback failed')
             await self.notify(e)
 
     async def fetch_pairs(self):

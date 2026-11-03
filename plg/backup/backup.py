@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -113,10 +114,10 @@ class Backup(TGBFPlugin):
                                         )
                                     self.log.debug(f"Added to backup: {arcname}")
                                 except Exception as e:
-                                    self.log.error(f"Failed to add file {file_path}: {e}")
+                                    self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
 
             except Exception as e:
-                self.log.error(f"ZIP creation failed: {e}")
+                self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
                 await status_message.edit_text(f"{con.ERROR} Failed to create ZIP: {str(e)}")
                 if filepath.exists():
                     filepath.unlink()
@@ -144,7 +145,7 @@ class Backup(TGBFPlugin):
                 self.log.debug("File successfully sent to Telegram")
 
             except Exception as e:
-                self.log.error(f"Failed to send file: {e}")
+                self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
                 await status_message.edit_text(
                     f"{con.ERROR} Could not send backup file: {str(e)}\n"
                     f"The backup was created at: {filepath}"
@@ -160,7 +161,7 @@ class Backup(TGBFPlugin):
             await status_message.delete()
 
         except Exception as e:
-            self.log.error(f"Backup process failed: {e}")
+            self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
             await status_message.edit_text(f"{con.ERROR} Backup failed: {str(e)}")
             # Final cleanup attempt
             if filepath.exists():

@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -45,9 +46,8 @@ class Balance(TGBFPlugin):
 
         except Exception as e:
             await message.edit_text(f"{con.ERROR} {e}")
-            msg = f"BALANCE Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='balance_callback').error('Balance callback failed')
+            await self.notify(e)
             return
 
         await message.edit_text(balances)

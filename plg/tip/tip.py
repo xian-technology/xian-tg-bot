@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -103,11 +104,11 @@ class Tip(TGBFPlugin):
         try:
             # Send token
             send = await xian.send(amount, to_address, token=contract)
-            self.log.debug(f'Tip TX: {send}')
+            self.log.bind(**transaction_context(send)).debug("Transaction response received")
         except Exception as e:
             msg = f"TIP Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='tip_callback').error('Tip callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

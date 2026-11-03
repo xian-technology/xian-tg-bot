@@ -34,6 +34,9 @@ def _event_message(tx_hash: str | list[str], *, status: int = 0, result: str = "
 
 
 class DummyLog:
+    def bind(self, **context: object) -> "DummyLog":
+        return self
+
     def info(self, msg: str) -> None:
         pass
 

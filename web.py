@@ -26,7 +26,7 @@ class WebAppWrapper:
         async def root(): return FileResponse(self.res_path / 'root.html')
 
         self.srv = uvicorn.Server(
-            uvicorn.Config(self.app, host=self.host, port=self.port)
+            uvicorn.Config(self.app, host=self.host, port=self.port, log_config=None)
         )
 
         return self.srv

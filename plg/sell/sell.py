@@ -1,9 +1,9 @@
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
 import constants as con
 import utils as utl
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -148,7 +148,7 @@ class Sell(TGBFPlugin):
         return InlineKeyboardMarkup(menu)
 
     async def confirm_sell_callback(self, update: Update, context: CallbackContext):
-        self.log.debug(f'Data - update.callback_query.data: {update.callback_query.data}')
+        self.log.debug("Trade confirmation callback received")
         if not update.callback_query.data.startswith(self.name):
             return
 
@@ -182,22 +182,20 @@ class Sell(TGBFPlugin):
 
         try:
             approved_amount = await xian.get_approved_amount(contract, token=sell_contract)
-            self.log.debug(f'Approved amount: {approved_amount}')
+            self.log.debug("Token allowance checked")
         except Exception as e:
-            msg = f"GET APPROVED AMOUNT Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='confirm_sell_callback').error('Confirm sell callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
         if approved_amount < amount:
             try:
                 approve = await xian.approve(contract, token=sell_contract)
-                self.log.debug(f'Approve TX: {approve}')
+                self.log.bind(**transaction_context(approve)).debug("Transaction response received")
             except Exception as e:
-                msg = f"APPROVE Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='confirm_sell_callback').error('Confirm sell callback failed')
+                await self.notify(e)
                 await message.edit_text(f"{con.ERROR} {e}")
                 return
 
@@ -227,11 +225,10 @@ class Sell(TGBFPlugin):
                     "slippage": float(5)
                 }
             )
-            self.log.debug(f'Sell TX: {sell}')
+            self.log.bind(**transaction_context(sell)).debug("Transaction response received")
         except Exception as e:
-            msg = f"SELL Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='confirm_sell_callback').error('Confirm sell callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

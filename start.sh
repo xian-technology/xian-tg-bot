@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-exec uv run python main.py
+exec .venv/bin/python run_bot.py

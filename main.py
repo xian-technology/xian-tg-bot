@@ -15,6 +15,7 @@ from xian_py.config import TransportConfig
 
 import constants as con
 from config import ConfigManager
+from logging_setup import configure_logging, error_context
 from plugin import (
     PluginDependencyError,
     PluginLifecycleError,
@@ -63,7 +64,7 @@ class TelegramBot:
             except asyncio.CancelledError:
                 pass
             except Exception as e:
-                logger.debug(f"Error canceling task {task.get_name()}: {e}")
+                logger.bind(**error_context(e), handler='cancel_pending_tasks').debug('Cancel pending tasks failed')
 
     async def shutdown(self):
         """Graceful shutdown sequence"""
@@ -86,7 +87,7 @@ class TelegramBot:
                     # Finally shutdown the application
                     await self.bot.shutdown()
                 except Exception as e:
-                    logger.debug(f"Bot stop error (can be ignored): {e}")
+                    logger.bind(**error_context(e), handler='shutdown').debug('Shutdown failed')
 
                 await asyncio.sleep(0.5)  # Give it time to clean up
 
@@ -104,7 +105,7 @@ class TelegramBot:
                     try:
                         await self.disable_plugin(name)
                     except Exception as e:
-                        logger.error(f"Error disabling plugin {name}: {e}")
+                        logger.bind(**error_context(e), handler='shutdown').error('Shutdown failed')
 
             # Cancel any remaining tasks
             logger.info("Canceling remaining tasks...")
@@ -114,7 +115,7 @@ class TelegramBot:
             await asyncio.sleep(1)  # Give final logs time to be written
 
         except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+            logger.bind(**error_context(e), handler='shutdown').error('Shutdown failed')
         finally:
             await self.close_xian_session()
             logger.info("Shutdown coroutine finished")
@@ -164,11 +165,11 @@ class TelegramBot:
                     logger.info("Starting webserver...")
                     await self.web.run().serve()
             except Exception as e:
-                logger.error(f"Error in bot execution: {e}")
+                logger.bind(**error_context(e), handler='run').error('Bot execution failed')
                 await self.shutdown()
 
         except Exception as e:
-            logger.error(f"Critical error in main loop: {e}")
+            logger.bind(**error_context(e), handler='run').error('Bot execution failed')
             await self.shutdown()
 
     async def load_plugins(self):
@@ -182,7 +183,7 @@ class TelegramBot:
                     await self.enable_plugin(folder)
                 break
         except Exception as e:
-            logger.error(f"Error loading plugins: {e}")
+            logger.bind(**error_context(e), handler='load_plugins').error('Load plugins failed')
             raise
 
     async def enable_plugin(self, name):
@@ -212,10 +213,10 @@ class TelegramBot:
                 return True, msg
 
         except PluginLifecycleError as exc:
-            logger.error(exc)
+            logger.bind(**error_context(exc), handler='enable_plugin').error('Plugin activation failed')
             return False, exc.message
         except Exception as e:
-            logger.exception(f"Plugin '{name}' cannot be enabled")
+            logger.bind(**error_context(e), handler='enable_plugin').error('Plugin activation failed')
             return False, str(e)
 
     async def disable_plugin(self, name):
@@ -233,7 +234,7 @@ class TelegramBot:
                     try:
                         self.bot.remove_handler(handler, group)
                     except Exception as e:
-                        logger.debug(f"Error removing handler: {e}")
+                        logger.bind(**error_context(e), handler='disable_plugin').debug('Disable plugin failed')
                 plugin.handlers.clear()
 
                 # Remove plugin endpoints
@@ -242,7 +243,7 @@ class TelegramBot:
                     try:
                         self.web.remove_endpoint(endpoint)
                     except Exception as e:
-                        logger.debug(f"Error removing endpoint: {e}")
+                        logger.bind(**error_context(e), handler='disable_plugin').debug('Disable plugin failed')
                 plugin.endpoints.clear()
 
                 # Remove all plugin references
@@ -252,7 +253,7 @@ class TelegramBot:
                     del self.plugins[name]
                     del plugin
                 except Exception as e:
-                    logger.debug(f"Error cleaning plugin references: {e}")
+                    logger.bind(**error_context(e), handler='disable_plugin').debug('Disable plugin failed')
 
                 msg = f"Plugin '{name}' disabled"
                 logger.info(msg)
@@ -260,7 +261,7 @@ class TelegramBot:
                 return True, msg
 
             except Exception as e:
-                logger.error(f"Error disabling plugin {name}: {e}")
+                logger.bind(**error_context(e), handler='disable_plugin').error('Disable plugin failed')
                 return False, str(e)
 
     async def _load_plugin_module(self, name: str) -> ModuleType:
@@ -284,7 +285,7 @@ class TelegramBot:
         return plugin_cls
 
 
-if __name__ == "__main__":
+def run():
     # Load data from .env file
     load_dotenv()
 
@@ -292,23 +293,7 @@ if __name__ == "__main__":
     log_level = os.getenv('LOG_LEVEL', 'INFO')
     log_into_file = os.getenv('LOG_INTO_FILE', 'true').lower() == 'true'
 
-    # Remove standard logger
-    logger.remove()
-
-    # Add new loguru logger
-    logger.add(
-        sys.stderr,
-        level=log_level
-    )
-
-    # Save log in file
-    if log_into_file:
-        logger.add(
-            Path(Path('log') / Path('{time}.log')),
-            format="{time} {level} {name} {message}",
-            level=log_level,
-            rotation="5 MB"
-        )
+    configure_logging(log_level, log_into_file)
 
     bot = TelegramBot()
     try:
@@ -323,3 +308,10 @@ if __name__ == "__main__":
         except RuntimeError:
             # Event loop may already be closed; best effort log
             logger.debug("Event loop already closed during shutdown")
+
+    finally:
+        logger.remove()
+
+
+if __name__ == "__main__":
+    run()

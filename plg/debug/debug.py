@@ -8,6 +8,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import utils as utl
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -28,7 +29,7 @@ class Debug(TGBFPlugin):
         try:
             await update.message.delete()
         except Exception as e:
-            self.log.debug(f'Could not delete message: {e}')
+            self.log.bind(**error_context(e), handler='debug_callback').debug('Debug callback failed')
 
         try:
             vi = sys.version_info
@@ -67,5 +68,5 @@ class Debug(TGBFPlugin):
                     update.effective_user.id,
                     f"{msg}\n\nChat details: <code>{chat_details}</code>")
         except Exception as e:
-            self.log.error(f"Could not send debug info: {e}")
+            self.log.bind(**error_context(e), handler='debug_callback').error('Debug callback failed')
             await self.notify(e)

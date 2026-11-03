@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import inspect
 import os
 from collections.abc import AsyncIterator, Callable
@@ -25,6 +26,7 @@ from xian_py.wallet import Wallet
 import constants as c
 import utils as utl
 from config import ConfigError, ConfigManager
+from logging_setup import error_context, update_context
 from transactions import confirm_submission
 
 if TYPE_CHECKING:
@@ -303,7 +305,7 @@ class TGBFPlugin:
             with open(path, encoding="utf8") as f:
                 return f.read()
         except Exception as e:
-            self.log.error(e)
+            self.log.bind(**error_context(e), handler='_get_resource_content').error('Resource content read failed')
             await self.notify(e)
 
     async def get_jobs(self, name=None) -> tuple[Job, ...]:
@@ -457,7 +459,7 @@ class TGBFPlugin:
                     return result
 
         except Exception as e:
-            self.log.error(f"GraphQL error: {e}")
+            self.log.bind(**error_context(e), handler='fetch_graphql').error('GraphQL request failed')
             raise
 
     async def exec_sql_global(self, sql, *args, db_name=""):
@@ -526,8 +528,9 @@ class TGBFPlugin:
 
         res = {"data": None, "success": None}
 
-        sql_str = ' '.join(sql.split())
-        self.log.debug(f"Access DB '{db_path}' with SQL '{sql_str}' and values '{args}'")
+        verb = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else "EMPTY"
+        query_type = verb if verb in {"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP"} else "OTHER"
+        self.log.bind(query_type=query_type, arg_count=len(args)).debug("Executing database statement")
 
         try:
             # Create directory if it doesn't exist
@@ -543,8 +546,9 @@ class TGBFPlugin:
         except Exception as e:
             res["data"] = str(e)
             res["success"] = False
-            self.log.error(e)
-            await self.notify(e)
+            incident = error_context(e)
+            self.log.bind(**incident).error("Database statement failed")
+            await self.notify(f"Database statement failed; incident_id={incident['incident_id']}")
 
         return res
 
@@ -594,7 +598,7 @@ class TGBFPlugin:
                 if result:
                     exists = True
         except Exception as e:
-            self.log.error(e)
+            self.log.bind(**error_context(e), handler='_db_table_exists').error('Database table check failed')
             await self.notify(e)
 
         return exists
@@ -648,7 +652,7 @@ class TGBFPlugin:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
             except Exception as e:
-                self.log.error(f"Not possible to remove message: {e}")
+                self.log.bind(**error_context(e), handler='remove_msg_job').error('Remove msg job failed')
 
         for message in messages:
             self.run_once(
@@ -660,15 +664,17 @@ class TGBFPlugin:
         """ Admin in global config will get a message with the given text.
          Primarily used for exceptions but can be used with other inputs too. """
 
-        msg = repr(msg) if isinstance(msg, Exception) else msg
+        if isinstance(msg, Exception):
+            incident = error_context(msg)
+            self.log.bind(**incident).error("Plugin operation failed")
+            msg = html.escape("Plugin operation failed; " + " ".join(f"{key}={value}" for key, value in incident.items()))
 
         admin = self.cfg_global.get('admin_tg_id')
 
         try:
             await self.tgb.bot.updater.bot.send_message(admin, f"{c.ALERT} {msg}")
         except Exception as e:
-            error = f"Not possible to notify admin id '{admin}'"
-            self.log.error(f"{error}: {e}")
+            self.log.bind(**error_context(e)).error("Admin notification delivery failed")
             return False
 
         return True
@@ -680,7 +686,7 @@ class TGBFPlugin:
         def decorator(func):
             @wraps(func)
             async def _logging(self, update: Update, context: CallbackContext, **kwargs):
-                TGBFPlugin.log.debug(f'update: {update}')
+                TGBFPlugin.log.bind(**update_context(update, func.__name__)).debug("Handling update")
 
                 if asyncio.iscoroutinefunction(func):
                     return await func(self, update, context, **kwargs)

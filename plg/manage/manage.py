@@ -3,6 +3,7 @@ from telegram.error import ChatMigrated
 from telegram.ext import CallbackContext, MessageHandler, filters
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -36,7 +37,7 @@ class Manage(TGBFPlugin):
         except ChatMigrated as e:
             # Handle group migration to supergroup
             new_chat_id = e.new_chat_id
-            self.log.info(f"Chat migrated from {chat_id} to {new_chat_id}")
+            self.log.bind(**error_context(e), handler='manage_callback', chat_id=chat_id).info('Manage callback failed')
 
             # Use the new chat ID for the API call
             try:
@@ -44,12 +45,12 @@ class Manage(TGBFPlugin):
                 if chat_member.status in ['administrator', 'creator']:
                     return
             except Exception as inner_e:
-                self.log.error(f'Error getting chat member with new chat ID: {inner_e}')
-                await self.notify(f"Chat migration handled but error occurred: {inner_e}")
+                self.log.bind(**error_context(inner_e), handler='manage_callback').error('Manage callback failed')
+                await self.notify(inner_e)
                 return
 
         except Exception as e:
-            self.log.error(f'Error getting chat member: {e}')
+            self.log.bind(**error_context(e), handler='manage_callback').error('Manage callback failed')
             await self.notify(e)
             return
 
@@ -70,5 +71,6 @@ class Manage(TGBFPlugin):
                     remove_after = self.cfg.get('remove_after_secs')
                     await self.remove_msg_after(info_msg, after_secs=remove_after)
         except Exception as e:
-            self.log.error(f'Can not delete message: {e} - UPDATE: {update}')
-            await self.notify(e)
+            incident = error_context(e, update)
+            self.log.bind(**incident).error("Message deletion failed")
+            await self.notify(f"Message deletion failed; incident_id={incident['incident_id']}")

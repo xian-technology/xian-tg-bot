@@ -5,6 +5,7 @@ from telegram.ext import CallbackContext, CommandHandler
 from xian_py.wallet import Wallet
 
 import constants as con
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -86,7 +87,7 @@ class Testnet(TGBFPlugin):
             )
 
         except Exception as e:
-            self.log.error(f"Unexpected error: {e}")
+            self.log.bind(**error_context(e), handler='handle_balance').error('Handle balance failed')
             await self.notify(e)
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 
@@ -110,9 +111,8 @@ class Testnet(TGBFPlugin):
                 send = await testnet.send(amount, user_address)
 
                 if not submission_accepted(send):
-                    msg = f"CLAIM Error: {send.message}"
-                    self.log.error(msg)
-                    await self.notify(msg)
+                    self.log.bind(**transaction_context(send)).error("Faucet transaction rejected")
+                    await self.notify("Faucet transaction rejected; inspect transaction metadata in the log")
                     await message.edit_text(f"{con.ERROR} Transaction failed: {send.message}")
                     return
 
@@ -121,11 +121,10 @@ class Testnet(TGBFPlugin):
                     await message.edit_text(f"{con.ERROR} Claim not confirmed: {result}")
                     return
 
-                self.log.debug(f'Claim TX: {send}')
+                self.log.bind(**transaction_context(send)).debug("Transaction response received")
             except Exception as e:
-                msg = f"CLAIM Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='handle_claim').error('Handle claim failed')
+                await self.notify(e)
                 await message.edit_text(f"{con.ERROR} {str(e)}")
                 return
 
@@ -141,7 +140,7 @@ class Testnet(TGBFPlugin):
         except ValueError as e:
             await message.edit_text(f"{con.ERROR} {str(e)}")
         except Exception as e:
-            self.log.error(f"Unexpected error: {e}")
+            self.log.bind(**error_context(e), handler='handle_claim').error('Handle claim failed')
             await self.notify(e)
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 
@@ -177,11 +176,10 @@ class Testnet(TGBFPlugin):
             try:
                 # Send testnet XIAN from user's wallet
                 send = await testnet.send(amount, to_address)
-                self.log.debug(f'Send TX: {send}')
+                self.log.bind(**transaction_context(send)).debug("Transaction response received")
             except Exception as e:
-                msg = f"SEND Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='handle_send').error('Handle send failed')
+                await self.notify(e)
                 await message.edit_text(f"{con.ERROR} {str(e)}")
                 return
 
@@ -207,7 +205,7 @@ class Testnet(TGBFPlugin):
                 await message.edit_text(f"{con.STOP} {send.message}")
 
         except Exception as e:
-            self.log.error(f"Unexpected error: {e}")
+            self.log.bind(**error_context(e), handler='handle_send').error('Handle send failed')
             await self.notify(e)
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 

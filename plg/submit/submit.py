@@ -5,6 +5,7 @@ import telegram
 from telegram.ext import CallbackContext, MessageHandler, filters
 
 import constants as con
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -63,11 +64,11 @@ class Submit(TGBFPlugin):
 
         try:
             deploy = await xian.submit_contract(name, code)
-            self.log.debug(f'Submit TX: {deploy}')
+            self.log.bind(**transaction_context(deploy)).debug("Transaction response received")
         except Exception as e:
             msg = f"DEPLOY_CONTRACT Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='submit_callback').error('Submit callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

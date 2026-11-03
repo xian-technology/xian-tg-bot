@@ -9,6 +9,7 @@ from typing import Any
 import websockets
 from xian_py.transaction import decode_str
 
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -141,7 +142,7 @@ class Event(TGBFPlugin):
 
                     uri += '/websocket'
 
-                self.log.info(f'Connecting to {uri}')
+                self.log.info("Connecting to configured node websocket")
 
                 # Store the websocket connection
                 self.ws = await websockets.connect(
@@ -193,7 +194,7 @@ class Event(TGBFPlugin):
 
                 # Exponential backoff, cap at 60 seconds
                 wait_secs = min(base_wait_time * (2 ** (retry_attempts - 1)), 60)
-                self.log.info(f'Websocket reconnect after {wait_secs} seconds')
+                self.log.bind(**error_context(e), handler='websocket_loop').info('Websocket loop failed')
                 await asyncio.sleep(wait_secs)
 
     async def fail_all_pending(self, reason="Connection failed"):
@@ -207,7 +208,7 @@ class Event(TGBFPlugin):
                     else:
                         callback(success=False, result=reason)
                 except Exception as e:
-                    self.log.error(f"Error calling callback for {tx_hash}: {e}")
+                    self.log.bind(**error_context(e), handler='fail_all_pending', tx_hash=tx_hash).error('Fail all pending failed')
             del self.execute[tx_hash]
 
         for tx_hash, future in list(self.futures.items()):
@@ -217,15 +218,15 @@ class Event(TGBFPlugin):
         self.pending_tx.clear()
 
     async def on_message(self, ws, msg):
-        self.log.info(f'Event {self.event}: {msg}')
+        self.log.info("Node websocket event received")
 
         try:
             tx_event = parse_tx_event_message(msg)
             if tx_event is None:
                 return
 
-            self.log.debug(f'Transaction hashes in event: {tx_event.tx_hashes}')
-            self.log.debug(f'Tracked transactions: {list(self.execute.keys())}')
+            self.log.bind(transaction_count=len(tx_event.tx_hashes)).debug("Transaction event parsed")
+            self.log.bind(pending_count=len(self.execute)).debug("Tracked transaction count")
 
             # Normalize all hashes to uppercase for comparison
             tx_hash_from_event_upper = [h.upper() for h in tx_event.tx_hashes]
@@ -238,10 +239,7 @@ class Event(TGBFPlugin):
                     self.log.debug(f'Found matching transaction: {tx_hash}')
 
                     try:
-                        self.log.debug(
-                            f'Transaction result: success={tx_event.success}, '
-                            f'result={tx_event.result}'
-                        )
+                        self.log.bind(tx_hash=tx_hash, status=tx_event.success).debug("Transaction execution completed")
 
                         # If there's a callback function, execute it
                         if self.execute[tx_hash]:
@@ -266,15 +264,15 @@ class Event(TGBFPlugin):
 
                         del self.execute[tx_hash]
                     except Exception as e:
-                        self.log.error(f'Error processing transaction {tx_hash}: {e}')
+                        self.log.bind(**error_context(e), handler='on_message', tx_hash=tx_hash).error('On message failed')
         except Exception as e:
-            self.log.error(f'Error in on_message: {e}')
+            self.log.bind(**error_context(e), handler='on_message').error('On message failed')
 
     async def on_error(self, error):
-        self.log.error(f'Websocket error: {error}')
+        self.log.bind(**error_context(error)).error("Node websocket failed")
 
     async def on_close(self, ws, status_code, msg):
-        self.log.info(f'Websocket connection closed with code {status_code} and message {msg}')
+        self.log.bind(close_code=status_code).info("Node websocket connection closed")
         self.is_connected = False
 
     async def on_open(self, ws):
@@ -338,7 +336,7 @@ class Event(TGBFPlugin):
             try:
                 self.log.debug(f'Waiting for transaction {tx_hash} with timeout {timeout}s')
                 result = await asyncio.wait_for(future, timeout)
-                self.log.debug(f'Wait completed for {tx_hash} with result: {result}')
+                self.log.bind(tx_hash=tx_hash).debug("Transaction wait completed")
                 return result
             except TimeoutError:
                 # Remove the future if timeout occurs
@@ -349,7 +347,7 @@ class Event(TGBFPlugin):
                     del self.execute[tx_hash]
                 raise
             except Exception as e:
-                self.log.error(f'Error waiting for transaction {tx_hash}: {e}')
+                self.log.bind(**error_context(e), handler='track_tx', tx_hash=tx_hash).error('Track tx failed')
                 if tx_hash in self.futures:
                     del self.futures[tx_hash]
                 if tx_hash in self.execute:

@@ -9,6 +9,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -60,7 +61,7 @@ class Trend(TGBFPlugin):
             data = pytrends.interest_over_time()
         except Exception as e:
             await update.message.reply_text(str(e))
-            self.log.error(e)
+            self.log.bind(**error_context(e), handler='trend_callback').error('Trend callback failed')
             await self.notify(e)
             return
 
@@ -116,7 +117,7 @@ class Trend(TGBFPlugin):
             fig = go.Figure(data=tr_data, layout=layout)
         except Exception as e:
             await update.message.reply_text(str(e))
-            self.log.error(e)
+            self.log.bind(**error_context(e), handler='trend_callback').error('Trend callback failed')
             await self.notify(e)
             return
 

@@ -3,6 +3,7 @@ from telegram.ext import CallbackContext, CommandHandler
 from xian_py.transaction import simulate_tx_async
 
 import constants as con
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -121,11 +122,11 @@ class Send(TGBFPlugin):
         try:
             # Send token
             send = await xian.send(amount, to, token=contract)
-            self.log.debug(f'Send TX: {send}')
+            self.log.bind(**transaction_context(send)).debug("Transaction response received")
         except Exception as e:
             msg = f"SEND Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='send_callback').error('Send callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

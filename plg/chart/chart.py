@@ -10,6 +10,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 from utils import parse_utc_datetime, utc_now
 
@@ -116,7 +117,7 @@ class Chart(TGBFPlugin):
             # They'll be loaded when needed or by the background job
 
         except Exception as e:
-            self.log.error(f"Error loading initial data: {e}")
+            self.log.bind(**error_context(e), handler='load_initial_data').error('Load initial data failed')
             await self.notify(e)
 
     async def fetch_pairs_from_graphql(self):
@@ -200,7 +201,7 @@ class Chart(TGBFPlugin):
                 await self.fetch_and_store_new_trades(pair_id)
 
         except Exception as e:
-            self.log.error(f"Error in update_trades_job: {e}")
+            self.log.bind(**error_context(e), handler='update_trades_job').error('Update trades job failed')
             await self.notify(e)
 
     async def update_pairs_job(self, context: CallbackContext):
@@ -223,7 +224,7 @@ class Chart(TGBFPlugin):
             self.log.info(f"Updated {len(pairs)} trading pairs")
 
         except Exception as e:
-            self.log.error(f"Error in update_pairs_job: {e}")
+            self.log.bind(**error_context(e), handler='update_pairs_job').error('Update pairs job failed')
             await self.notify(e)
 
     async def update_tokens_job(self, context: CallbackContext):
@@ -259,7 +260,7 @@ class Chart(TGBFPlugin):
             self.log.info(f"Updated {len(token_symbols)} token symbols")
 
         except Exception as e:
-            self.log.error(f"Error in update_tokens_job: {e}")
+            self.log.bind(**error_context(e), handler='update_tokens_job').error('Update tokens job failed')
             await self.notify(e)
 
     async def update_trades_for_pair(self, pair_id):
@@ -357,7 +358,7 @@ class Chart(TGBFPlugin):
                 self.log.info(f"Added {len(new_trades)} new trades for pair {pair_id}")
 
         except Exception as e:
-            self.log.error(f"Error updating trades for pair {pair_id}: {e}")
+            self.log.bind(**error_context(e), handler='update_trades_for_pair').error('Update trades for pair failed')
             await self.notify(e)
 
     def calculate_24h_volume_from_trades(self, events, base_is_token0=True):
@@ -696,7 +697,7 @@ class Chart(TGBFPlugin):
 
         except Exception as e:
             #await update.message.reply_text(f"{con.ERROR} Error creating chart: {e}")
-            self.log.error(f"Chart error: {e}")
+            self.log.bind(**error_context(e), handler='chart_callback').error('Chart callback failed')
             #await self.notify(e)
 
     async def fetch_pairs(self):
@@ -790,7 +791,7 @@ class Chart(TGBFPlugin):
                 'token0_symbol': pair_data[3],
                 'token1_symbol': pair_data[4]
             }
-            self.log.debug(f"Found pair in database: {pair}")
+            self.log.debug("Trading pair found in database")
             return pair
 
         # If not found in database, fetch from GraphQL
@@ -937,7 +938,7 @@ class Chart(TGBFPlugin):
                 self.log.info(f"Added {new_trades} new trades for pair {pair_id}")
 
         except Exception as e:
-            self.log.error(f"Error fetching new trades for pair {pair_id}: {e}")
+            self.log.bind(**error_context(e), handler='fetch_and_store_new_trades').error('Fetch and store new trades failed')
             await self.notify(e)
 
     def process_swap_events(self, events, interval_minutes, limit, base_is_token0=True):

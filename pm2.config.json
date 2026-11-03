@@ -1,12 +1,19 @@
 {
-    "apps": [{
-        "name": "tg-bot",
-        "script": "./start.sh",
-        "instances": "1",
-        "wait_ready": true,
-        "autorestart": true,
-        "max_restarts": 5,
-        "min_uptime": "5s",
-        "watch": false
-    }]
+    "apps": [
+        {
+            "name": "tg-bot",
+            "script": "./start.sh",
+            "instances": "1",
+            "wait_ready": true,
+            "autorestart": true,
+            "max_restarts": 5,
+            "min_uptime": "5s",
+            "watch": false,
+            "out_file": "/dev/null",
+            "error_file": "/dev/null",
+            "env": {
+                "LOG_INTO_FILE": "true"
+            }
+        }
+    ]
 }

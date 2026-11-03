@@ -5,6 +5,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -163,10 +164,10 @@ class Bless(TGBFPlugin):
                 full_name = f"{first_name} {last_name}".strip()
 
                 if "xian.org" not in full_name.lower():
-                    self.log.info(f"Skipping user {full_name} with ID {to_user_id}")
+                    self.log.bind(user_id=to_user_id).info("Recipient skipped")
                     continue
                 else:
-                    self.log.info(f"User {full_name} with ID {to_user_id} is eligible")
+                    self.log.bind(user_id=to_user_id).info("Recipient eligible")
 
                     # Add eligible user
                     address = (await self.get_wallet(to_user_id)).public_key
@@ -182,7 +183,7 @@ class Bless(TGBFPlugin):
                         self.log.warning(f"User limit of {user_limit} hit")
                         break
             except Exception as e:
-                self.log.error(f"Can't retrieve user info for user ID {to_user_id}: {e}")
+                self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
                 continue
 
         if not addresses:
@@ -212,11 +213,11 @@ class Bless(TGBFPlugin):
 
         try:
             approved_amount = await xian.get_approved_amount(multisend_contract, token=contract)
-            self.log.debug(f'Approved amount: {approved_amount}')
+            self.log.debug("Token allowance checked")
         except Exception as e:
             msg = f"GET APPROVED AMOUNT Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 
@@ -224,15 +225,15 @@ class Bless(TGBFPlugin):
             try:
                 # Approve sending tokens to contract
                 approve = await xian.approve(multisend_contract, token=contract)
-                self.log.debug(f'Approve: {approve}')
+                self.log.bind(**transaction_context(approve)).debug("Transaction response received")
 
                 if not submission_accepted(approve):
                     await message.edit_text(f"{con.ERROR} Can not approve contract!")
                     return
             except Exception as e:
                 msg = f"APPROVE Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
+                await self.notify(e)
                 await message.edit_text(f"{con.ERROR} {e}")
                 return
 
@@ -254,11 +255,11 @@ class Bless(TGBFPlugin):
         try:
             # Execute contract to send tokens
             send = await xian.send_tx(multisend_contract, multisend_function, kwargs)
-            self.log.debug(f'Bless TX: {send}')
+            self.log.bind(**transaction_context(send)).debug("Transaction response received")
         except Exception as e:
             msg = f"SEND Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

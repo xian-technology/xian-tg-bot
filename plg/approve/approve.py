@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -46,8 +47,8 @@ class Approve(TGBFPlugin):
             approve = await xian.approve(contract, token=token, amount=amount)
         except Exception as e:
             msg = f"APPROVE Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='approve_callback').error('Approve callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

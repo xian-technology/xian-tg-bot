@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -30,7 +31,7 @@ class Logfile(TGBFPlugin):
                 file = open(log_file, 'rb')
             except Exception as e:
                 file = None
-                self.log.error(e)
+                self.log.bind(**error_context(e), handler='logfile_callback').error('Logfile callback failed')
                 await self.notify(e)
         else:
             file = None

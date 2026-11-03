@@ -1,0 +1,13 @@
+# Render all placeholders before use. Dedicated bot service account only.
+# Only PM2's own daemon log: never use a wildcard covering other applications.
+"@PM2_HOME@/pm2.log" {
+    su @SERVICE_USER@ @SERVICE_GROUP@
+    daily
+    maxsize 50M
+    rotate 4
+    maxage 7
+    ifempty
+    missingok
+    copytruncate
+    nocompress
+}

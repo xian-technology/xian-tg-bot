@@ -5,6 +5,7 @@ from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
 import utils as utl
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -67,12 +68,12 @@ class All(TGBFPlugin):
                 successful += 1
             except BadRequest as e:
                 if "Chat not found" in str(e):
-                    self.log.warning(f"Could not send message to user {user_id[0]}: Chat not found")
+                    self.log.bind(**error_context(e), handler='send_callback', user_id=user_id).warning('Send callback failed')
                 else:
-                    self.log.error(f"Error sending message to user {user_id[0]}: {str(e)}")
+                    self.log.bind(**error_context(e), handler='send_callback', user_id=user_id).error('Send callback failed')
                 failed += 1
             except Exception as e:
-                self.log.error(f"Unexpected error sending message to user {user_id[0]}: {str(e)}")
+                self.log.bind(**error_context(e), handler='send_callback', user_id=user_id).error('Send callback failed')
                 failed += 1
             finally:
                 await asyncio.sleep(sleep_time)

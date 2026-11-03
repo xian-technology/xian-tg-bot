@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext, MessageHandler, filters
 
 import constants as con
 import utils as utl
+from logging_setup import error_context
 from plg.update.safe_zip import safe_extract_plugin_zip
 from plugin import TGBFPlugin
 
@@ -89,5 +90,5 @@ class Update(TGBFPlugin):
 
             await update.message.reply_text(f"{con.DONE} Plugin successfully loaded")
         except Exception as e:
-            self.log.error(e)
+            self.log.bind(**error_context(e), handler='update_callback').error('Update callback failed')
             await update.message.reply_text(f"{con.ERROR} {e}")

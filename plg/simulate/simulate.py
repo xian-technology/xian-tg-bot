@@ -5,6 +5,7 @@ from telegram.ext import CallbackContext, CommandHandler
 from xian_py.transaction import simulate_tx_async
 
 import constants as con
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 
 
@@ -55,11 +56,11 @@ class Simulate(TGBFPlugin):
         try:
             # Simulate transaction
             simulate = await simulate_tx_async(node_url, payload)
-            self.log.debug(f'Simulate TX: {simulate}')
+            self.log.bind(**transaction_context(simulate)).debug("Transaction response received")
         except Exception as e:
             msg = f"SIMULATE Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='simulate_callback').error('Simulate callback failed')
+            await self.notify(e)
             await message.edit_text(f"{con.ERROR} {e}")
             return
 

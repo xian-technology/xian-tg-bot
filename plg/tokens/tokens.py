@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -89,8 +90,8 @@ class Tokens(TGBFPlugin):
                         )
                     except Exception as e:
                         txt = f"{con.ERROR} Could not read token details for {entry['name']}: {e}"
-                        self.log.error(txt)
-                        await self.notify(txt)
+                        self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
+                        await self.notify(e)
                         return
 
                     if not entry['name'] or not ticker:
@@ -105,8 +106,8 @@ class Tokens(TGBFPlugin):
                             decimals
                         )
                     except Exception as e:
-                        self.log.debug(entry['name'])
-                        self.log.error(e)
+                        self.log.bind(**error_context(e), handler='tokens_callback').debug('Tokens callback failed')
+                        self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
                 await update.message.reply_text(f"{con.STARS} All tokens added!")
                 return
 
@@ -137,8 +138,8 @@ class Tokens(TGBFPlugin):
                         )
                     except Exception as e:
                         txt = f"{con.ERROR} Could not read token details for {token}: {e}"
-                        self.log.error(txt)
-                        await self.notify(txt)
+                        self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
+                        await self.notify(e)
                         return
 
                     try:
@@ -151,8 +152,8 @@ class Tokens(TGBFPlugin):
                         )
                     except Exception as e:
                         txt = f"{con.ERROR} Could not add token {token}: {e}"
-                        self.log.error(txt)
-                        await self.notify(txt)
+                        self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
+                        await self.notify(e)
 
                 msg = f"{con.DONE} Added recommended tokens"
                 await update.message.reply_text(msg)

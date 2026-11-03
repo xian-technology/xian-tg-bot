@@ -10,6 +10,7 @@ from xian_py.transaction import decode_str
 
 import constants as con
 import utils as utl
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -361,9 +362,9 @@ class Buybot(TGBFPlugin):
                             # Reset retry attempts on successful message
                             retry_attempts = 0
                     except websockets.ConnectionClosed as e:
-                        self.log.warning(f'WebSocket connection closed: {e.code}, {e.reason}')
+                        self.log.bind(**error_context(e), handler='websocket_loop').warning('Websocket loop failed')
             except Exception as e:
-                self.log.error(f'Websocket error: {e}')
+                self.log.bind(**error_context(e), handler='websocket_loop').error('Websocket loop failed')
                 gc.collect()
 
                 retry_attempts += 1
@@ -373,7 +374,7 @@ class Buybot(TGBFPlugin):
 
                 # Exponential backoff, cap at 60 seconds
                 wait_secs = min(base_wait_time * (2 ** (retry_attempts - 1)), 60)
-                self.log.info(f'Websocket reconnect after {wait_secs} seconds')
+                self.log.bind(**error_context(e), handler='websocket_loop').info('Websocket loop failed')
                 await asyncio.sleep(wait_secs)
 
     async def on_open(self, ws):
@@ -406,7 +407,7 @@ class Buybot(TGBFPlugin):
             await self.process_transaction(msg_json['result'])
 
         except Exception as e:
-            self.log.error(f'Error processing websocket message: {e}')
+            self.log.bind(**error_context(e), handler='on_message').error('On message failed')
             await self.notify(e)
 
     def format_current_time_for_display(self):
@@ -533,11 +534,11 @@ class Buybot(TGBFPlugin):
                             await self.send_dex_notification(contract, function, arguments, tx_hash)
                             return  # Process only once
             except Exception as e:
-                self.log.debug(f"Failed to decode transaction data: {e}")
+                self.log.bind(**error_context(e), handler='process_transaction').debug('Process transaction failed')
                 return
 
         except Exception as e:
-            self.log.error(f'Error processing transaction data: {e}')
+            self.log.bind(**error_context(e), handler='process_transaction').error('Process transaction failed')
             await self.notify(e)
 
     async def get_token_symbol(self, contract_address):
@@ -570,7 +571,7 @@ class Buybot(TGBFPlugin):
             return fallback
 
         except Exception as e:
-            self.log.debug(f"Error getting token symbol for {contract_address}: {e}")
+            self.log.bind(**error_context(e), handler='get_token_symbol').debug('Get token symbol failed')
             fallback = contract_address.replace("con_", "").upper()
             return fallback
 
@@ -597,7 +598,7 @@ class Buybot(TGBFPlugin):
                 return pair_info
 
         except Exception as e:
-            self.log.debug(f"Error getting pair info for pair {pair_id}: {e}")
+            self.log.bind(**error_context(e), handler='get_pair_tokens').debug('Get pair tokens failed')
 
         return None
 
@@ -769,16 +770,12 @@ class Buybot(TGBFPlugin):
 
                     # Check minimum value threshold
                     if min_value is not None and xian_amount < min_value:
-                        self.log.info(
-                            f"Skipping notification for chat {chat_id} - "
-                            f"trade amount {xian_amount} XIAN below minimum {min_value} XIAN")
+                        self.log.bind(chat_id=chat_id).info("Notification skipped: below configured minimum")
                         continue
 
                     # Check token filtering
                     if allowed_tokens is not None and token_symbol not in allowed_tokens:
-                        self.log.info(
-                            f"Skipping notification for chat {chat_id} - "
-                            f"{token_symbol} not in allowed tokens: {allowed_tokens}")
+                        self.log.bind(chat_id=chat_id).info("Notification skipped: token not allowed")
                         continue
 
                     # Send message with thread_id if available
@@ -792,8 +789,8 @@ class Buybot(TGBFPlugin):
                     self.log.info(f"Sent DEX notification to chat {chat_id}" +
                                   (f" thread {thread_id}" if thread_id else ""))
                 except Exception as e:
-                    self.log.error(f"Failed to send DEX notification to chat {chat_entry}: {e}")
+                    self.log.bind(**error_context(e), handler='send_dex_notification').error('Send dex notification failed')
 
         except Exception as e:
-            self.log.error(f'Error sending DEX notification: {e}')
+            self.log.bind(**error_context(e), handler='send_dex_notification').error('Send dex notification failed')
             await self.notify(e)

@@ -6,6 +6,7 @@ from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
 import constants as con
 import utils as utl
+from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import submission_accepted
 
@@ -106,22 +107,20 @@ class Lottery(TGBFPlugin):
 
         try:
             approved_amount = await xian.get_approved_amount(lottery_contract, token=token_contract)
-            self.log.debug(f'approved amount: {approved_amount}')
+            self.log.debug("Token allowance checked")
         except Exception as e:
-            msg = f"GET APPROVED AMOUNT Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')
+            await self.notify(e)
             await update.message.reply_text(f"{con.ERROR} {e}")
             return
 
         if approved_amount < amount:
             try:
                 approve = await xian.approve(lottery_contract, token=token_contract)
-                self.log.debug(f'Approve TX: {approve}')
+                self.log.bind(**transaction_context(approve)).debug("Transaction response received")
             except Exception as e:
-                msg = f"APPROVE Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')
+                await self.notify(e)
                 await update.message.reply_text(f"{con.ERROR} {e}")
                 return
 
@@ -149,11 +148,10 @@ class Lottery(TGBFPlugin):
         try:
             # Execute contract to start lottery
             send = await xian.send_tx(lottery_contract, 'lottery_start', kwargs)
-            self.log.debug(f'Lottery Start TX: {send}')
+            self.log.bind(**transaction_context(send)).debug("Transaction response received")
         except Exception as e:
-            msg = f"Lottery Start Error: {e}"
-            self.log.error(msg)
-            await self.notify(msg)
+            self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')
+            await self.notify(e)
             await update.message.reply_text(f"{con.ERROR} {e}")
             return
 
@@ -254,7 +252,7 @@ class Lottery(TGBFPlugin):
                     'lottery_register',
                     {'lottery_id': lottery_id}
                 )
-                self.log.debug(f'Lottery Register TX: {send}')
+                self.log.bind(**transaction_context(send)).debug("Transaction response received")
 
                 tx_hash = send.tx_hash
                 explorer_url = self.cfg_global.get('xian', 'explorer')
@@ -305,9 +303,8 @@ class Lottery(TGBFPlugin):
                         f"{con.ERROR} Something went wrong..."
                     )
             except Exception as e:
-                msg = f"LOTTERY REGISTER Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='lottery_action_callback').error('Lottery action callback failed')
+                await self.notify(e)
                 await context.bot.answer_callback_query(
                     update.callback_query.id,
                     f"{con.ERROR} {e}"
@@ -321,7 +318,7 @@ class Lottery(TGBFPlugin):
                     'lottery_end',
                     {'lottery_id': lottery_id}
                 )
-                self.log.debug(f'Lottery End TX: {send}')
+                self.log.bind(**transaction_context(send)).debug("Transaction response received")
 
                 tx_hash = send.tx_hash
                 explorer_url = self.cfg_global.get('xian', 'explorer')
@@ -377,9 +374,8 @@ class Lottery(TGBFPlugin):
                     )
                     return
             except Exception as e:
-                msg = f"LOTTERY END Error: {e}"
-                self.log.error(msg)
-                await self.notify(msg)
+                self.log.bind(**error_context(e), handler='lottery_action_callback').error('Lottery action callback failed')
+                await self.notify(e)
                 await context.bot.answer_callback_query(
                     update.callback_query.id,
                     f"{con.ERROR} {e}"

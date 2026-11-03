@@ -1,6 +1,7 @@
 from telegram import Chat, Update
 from telegram.ext import CallbackContext, MessageHandler, filters
 
+from logging_setup import error_context
 from plugin import TGBFPlugin
 
 
@@ -45,8 +46,9 @@ class Active(TGBFPlugin):
                 m.text if m.text else None
             )
         except Exception as e:
-            self.log.error(f'Can not save activity: {e} - UPDATE: {update}')
-            await self.notify(e)
+            incident = error_context(e, update)
+            self.log.bind(**incident).error("Activity persistence failed")
+            await self.notify(f"Activity persistence failed; incident_id={incident['incident_id']}")
 
     async def cleaner_callback(self, context: CallbackContext):
         sql = await self.get_resource('delete_active.sql')
