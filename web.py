@@ -20,7 +20,7 @@ class WebAppWrapper:
         self.app.include_router(self.router)
 
         @self.app.exception_handler(404)
-        async def ex(req, exc): return FileResponse(self.res_path / '404.html')
+        async def ex(req, exc): return FileResponse(self.res_path / '404.html', status_code=404)
 
         @self.app.get('/', include_in_schema=False)
         async def root(): return FileResponse(self.res_path / 'root.html')
@@ -38,12 +38,9 @@ class WebAppWrapper:
             self.router.add_api_route(path, endpoint)
 
     def remove_endpoint(self, path):
-        for route in self.router.routes:
-            if route.path == path:
-                if self.app:
-                    self.app.routes.remove(route)
-                else:
-                    self.router.routes.remove(route)
+        self.router.routes[:] = [route for route in self.router.routes if route.path != path]
+        if self.app:
+            self.app.routes[:] = [route for route in self.app.routes if route.path != path]
 
     async def stop(self):
         if self.srv and self.srv.started:

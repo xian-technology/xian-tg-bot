@@ -69,6 +69,10 @@ Register additional behaviour with helper methods:
 - `self.run_once(func, when, data=None)` / `self.run_repeating(...)` – schedule jobs.
 - `await self.notify("message")` – alert the admin defined in `cfg/global.json`.
 
+Each handler registration is tracked independently, including aliases in the
+same Telegram group. Disabling a plugin removes all its registered handlers and
+HTTP routes; re-enabling it attaches the replacement routes.
+
 ## Data & Resources
 ### SQLite (async)
 ```python
@@ -78,7 +82,14 @@ if not await self.table_exists("sample"):
 result = await self.exec_sql("SELECT * FROM sample WHERE id = ?", some_id)
 rows = result["data"] if result["success"] else []
 ```
-The helpers wrap `aiosqlite` connections and commit automatically. Use `table_exists_global()` and `exec_sql_global()` to work with shared tables.
+The helpers wrap `aiosqlite` connections and commit automatically. Returned rows,
+including SQL `RETURNING` results, are collected before commit. A failed
+statement rolls back. Use `table_exists_global()` and `exec_sql_global()` to work
+with shared tables.
+
+`await self.get_wallet(user_id)` returns the user's persisted wallet. Concurrent
+first requests receive the same stored identity. Database lookup or creation
+failures raise `RuntimeError` rather than returning an unpersisted key.
 
 ### Key-Value Store
 ```python

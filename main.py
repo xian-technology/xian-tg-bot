@@ -229,7 +229,7 @@ class TelegramBot:
                 await plugin.cleanup()
 
                 # Remove plugin handlers
-                handlers = list(plugin.handlers.items())
+                handlers = list(plugin.handlers)
                 for group, handler in handlers:
                     try:
                         self.bot.remove_handler(handler, group)

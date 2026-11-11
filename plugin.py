@@ -83,7 +83,7 @@ class TGBFPlugin:
         self._name = type(self).__name__.lower()
 
         # All bot handlers for this plugin
-        self._handlers: dict[int, BaseHandler] = dict()
+        self._handlers: list[tuple[int, BaseHandler]] = []
 
         # All endpoints of this plugin
         self._endpoints: dict[str, Callable] = dict()
@@ -174,7 +174,7 @@ class TGBFPlugin:
         return self._cfg
 
     @property
-    def handlers(self) -> dict[int, BaseHandler]:
+    def handlers(self) -> list[tuple[int, BaseHandler]]:
         """ Return a list of bot handlers for this plugin """
         return self._handlers
 
@@ -212,17 +212,17 @@ class TGBFPlugin:
                 group = abs(hash(self.name)) % 1000 + 1
 
         self.tgb.bot.add_handler(handler, group)
-        self.handlers[group] = handler
+        self.handlers.append((group, handler))
 
         self.log.info(f"Plugin '{self.name}': {type(handler).__name__} added to group {group}")
 
     async def remove_handler(self, handler: BaseHandler):
         """ Removed the given handler from the bot """
 
-        for g, h in self.handlers.items():
+        for index, (g, h) in enumerate(self.handlers):
             if h == handler:
                 self.tgb.bot.remove_handler(h, g)
-                del self.handlers[g]
+                del self.handlers[index]
                 break
 
         self.log.info(f"Plugin '{self.name}': {type(handler).__name__} removed")
@@ -539,9 +539,8 @@ class TGBFPlugin:
             async with aiosqlite.connect(db_path, timeout=5) as con:
                 cur = await con.cursor()
                 await cur.execute(sql, args)
-                await con.commit()
-
                 res["data"] = await cur.fetchall()
+                await con.commit()
                 res["success"] = True
         except Exception as e:
             res["data"] = str(e)
@@ -907,6 +906,8 @@ class TGBFPlugin:
         # Check if user already has a wallet
         sql = await self.get_resource_global("select_wallet.sql")
         res = await self.exec_sql_global(sql, user_id, db_name=db_name)
+        if not res["success"]:
+            raise RuntimeError("Wallet lookup failed")
 
         # User already has a wallet
         if res["data"]:
@@ -916,12 +917,21 @@ class TGBFPlugin:
         wallet = Wallet()
 
         # Save wallet to database
-        await self.exec_sql_global(
+        saved = await self.exec_sql_global(
             await self.get_resource_global("insert_wallet.sql"),
             user_id,
             wallet.public_key,
             wallet.private_key,
             db_name=db_name)
+        if not saved["success"]:
+            raise RuntimeError("Wallet creation failed")
+
+        # A simultaneous first request may have inserted another key. Return
+        # only the canonical persisted identity, never the losing candidate.
+        persisted = await self.exec_sql_global(sql, user_id, db_name=db_name)
+        if not persisted["success"] or not persisted["data"]:
+            raise RuntimeError("Wallet lookup failed after creation")
+        wallet = Wallet(persisted["data"][0][2])
 
         self.log.info(f'Address {wallet.public_key} created for user ID {user_id}')
         return wallet
