@@ -349,3 +349,169 @@ async def test_trade_confirmation_executes_once(side: str, tmp_path: Path, monke
     assert client.send_tx.await_count == 1
     plugin.get_wallet.assert_awaited_once_with(7)
 
+
+
+# --- exact token approvals --------------------------------------------------
+
+@pytest.mark.parametrize("kind", ["rain", "bless"])
+async def test_multisend_approves_exactly_the_distributed_amount(kind: str) -> None:
+    from plg.bless.bless import Bless
+    from plg.rain.rain import Rain
+    from transactions import parse_amount
+
+    cls = Rain if kind == "rain" else Bless
+    plugin = plugin_instance(cls, kind)
+    client = SimpleNamespace(
+        get_approved_amount=AsyncMock(return_value=parse_amount("9.9")),
+        approve=AsyncMock(return_value=submission()),
+        send_tx=AsyncMock(return_value=submission()),
+        wait_for_tx=AsyncMock(return_value=receipt()),
+    )
+    plugin.get_xian = AsyncMock(return_value=client)
+    plugin.get_wallet = AsyncMock(side_effect=lambda user_id: Wallet(str(user_id) * 64))
+    plugin.get_resource = AsyncMock(return_value="SELECT users")
+    plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(2, "a"), (3, "b"), (4, "c")]})
+    plugin._cfg = config({"user_limit": 10, "contract": "con_multisend", "function": "send"})
+    message = edited_message()
+    update = SimpleNamespace(
+        message=SimpleNamespace(from_user=SimpleNamespace(id=1), reply_text=AsyncMock(return_value=message)),
+        effective_chat=SimpleNamespace(id=1),
+    )
+    context = SimpleNamespace(args=["10", "1h"], bot=SimpleNamespace(
+        get_chat=AsyncMock(return_value=SimpleNamespace(first_name="xian.org", last_name="")),
+    ))
+
+    await inspect.unwrap(cls.rain_callback)(plugin, update, context)
+
+    # 10 split over 3 recipients at four places is 3.3333 each: 9.9999 leaves the sender
+    client.approve.assert_awaited_once_with("con_multisend", token="currency", amount=parse_amount("9.9999"))
+
+
+@pytest.mark.parametrize(("deposit", "approved"), [("2.5", "2.5"), ("3", "3")])
+async def test_lottery_approves_exactly_the_deposit(deposit: str, approved: str) -> None:
+    from plg.lottery.lottery import Lottery
+    from transactions import parse_amount
+
+    plugin = plugin_instance(Lottery, "lottery")
+    plugin._cfg = config({"contract": "con_lottery"})
+    plugin.get_wallet = AsyncMock(return_value=Wallet("1" * 64))
+    client = SimpleNamespace(
+        get_approved_amount=AsyncMock(return_value=0),
+        approve=AsyncMock(return_value=submission()),
+        send_tx=AsyncMock(return_value=submission()),
+        wait_for_tx=AsyncMock(return_value=receipt(success=False, result="stop")),
+    )
+    plugin.get_xian = AsyncMock(return_value=client)
+    update = SimpleNamespace(message=SimpleNamespace(
+        id=5, from_user=SimpleNamespace(id=1), reply_text=AsyncMock(),
+    ))
+
+    await inspect.unwrap(Lottery.lottery_callback)(plugin, update, SimpleNamespace(args=[deposit]))
+
+    client.approve.assert_awaited_once_with("con_lottery", token="currency", amount=parse_amount(approved))
+
+
+async def test_sell_approves_exactly_the_sold_amount_of_the_sold_token() -> None:
+    import json
+
+    from plg.sell.sell import Sell
+    from transactions import parse_amount
+
+    plugin = plugin_instance(Sell, "sell")
+    plugin._cfg = json.loads((ROOT / "plg" / "sell" / "cfg" / "sell.json").read_text())
+    plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
+    plugin.get_wallet = AsyncMock()
+    client = SimpleNamespace(
+        get_approved_amount=AsyncMock(return_value=parse_amount("2.4")),
+        approve=AsyncMock(return_value=submission()),
+        send_tx=AsyncMock(return_value=submission()),
+        wait_for_tx=AsyncMock(return_value=receipt(result=[2.5, 1])),
+    )
+    plugin.get_xian = AsyncMock(return_value=client)
+    update = SimpleNamespace(effective_message=SimpleNamespace(edit_text=AsyncMock()),
+                             effective_user=SimpleNamespace(id=7),
+                             callback_query=SimpleNamespace(data="sell_1", id="1"))
+
+    await plugin.confirm_sell_callback(update, SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock())))
+
+    client.get_approved_amount.assert_awaited_once_with("con_dex_helper", token="con_a")
+    client.approve.assert_awaited_once_with("con_dex_helper", token="con_a", amount=parse_amount("2.5"))
+
+
+# --- result reporting -------------------------------------------------------
+
+@pytest.mark.parametrize("side", ["buy", "sell"])
+async def test_failed_trade_popup_does_not_claim_success(side: str) -> None:
+    import json
+
+    from plg.buy.buy import Buy
+    from plg.sell.sell import Sell
+
+    plugin = plugin_instance(Buy if side == "buy" else Sell, side)
+    plugin._cfg = json.loads((ROOT / "plg" / side / "cfg" / f"{side}.json").read_text())
+    plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
+    plugin.get_wallet = AsyncMock()
+    client = SimpleNamespace(
+        get_approved_amount=AsyncMock(return_value=1000),
+        send_tx=AsyncMock(return_value=submission()),
+        wait_for_tx=AsyncMock(return_value=receipt(success=False, result="Trade deadline has expired")),
+    )
+    plugin.get_xian = AsyncMock(return_value=client)
+    context = SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock()))
+    update = SimpleNamespace(effective_message=SimpleNamespace(edit_text=AsyncMock()),
+                             effective_user=SimpleNamespace(id=7),
+                             callback_query=SimpleNamespace(data=f"{side}_1", id="1"))
+
+    await getattr(plugin, f"confirm_{side}_callback")(update, context)
+
+    popup = context.bot.answer_callback_query.await_args.args[1]
+    assert "Bought" not in popup and "Sold" not in popup
+
+
+async def test_faucet_records_claim_whose_outcome_is_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from plg.testnet.testnet import Testnet
+
+    monkeypatch.chdir(tmp_path)
+    plugin = plugin_instance(Testnet, "testnet")
+    plugin._cfg = config({"amount": 100, "threshold": 20, "days_waiting": 1})
+    client = SimpleNamespace(
+        get_balance=AsyncMock(return_value=0),
+        send=AsyncMock(return_value=submission()),
+        wait_for_tx=AsyncMock(side_effect=TimeoutError()),
+    )
+    plugin.get_testnet_instance = AsyncMock(return_value=client)
+    messages = [edited_message() for _ in range(2)]
+    wallet = Wallet("1" * 64)
+    for message in messages:
+        update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock(return_value=message)))
+        await plugin.handle_claim(update, wallet)
+
+    assert client.send.await_count == 1
+    assert "may still complete" in messages[0].edit_text.call_args.args[0]
+    assert "wait" in messages[1].edit_text.call_args.args[0]
+
+
+@pytest.mark.parametrize("caption", ["con_token", "name=", "=con_x", "name=con_a=b"])
+async def test_submit_rejects_malformed_caption_without_deploying(
+    caption: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import plg.submit.submit as submit_module
+
+    plugin = plugin_instance(submit_module.Submit, "submit")
+    plugin.get_xian = AsyncMock()
+    update = SimpleNamespace(message=SimpleNamespace(
+        document=SimpleNamespace(file_name="con_token.py"), caption=caption, reply_text=AsyncMock(),
+    ))
+    monkeypatch.setattr(submit_module, "telegram", SimpleNamespace(Update=SimpleNamespace))
+
+    await inspect.unwrap(submit_module.Submit.submit_callback)(plugin, update, SimpleNamespace())
+
+    plugin.get_xian.assert_not_awaited()
+    assert "key=value" in update.message.reply_text.await_args.args[0]
+
+
+def test_submit_caption_accepts_key_value_pairs() -> None:
+    from plg.submit.submit import parse_caption
+
+    assert parse_caption(None) == {}
+    assert parse_caption("name=con_token, owner=abc") == {"name": "con_token", "owner": "abc"}

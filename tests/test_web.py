@@ -27,7 +27,9 @@ def test_web_app_wrapper_preserves_default_bind_host() -> None:
     assert server.config.host == "0.0.0.0"
 
 
-async def test_telegram_bot_wires_configured_webserver_host(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_telegram_bot_wires_configured_webserver_host(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
     plugin_module = types.ModuleType("plugin")
 
     class PluginDependencyError(Exception):
@@ -50,6 +52,9 @@ async def test_telegram_bot_wires_configured_webserver_host(monkeypatch: pytest.
 
     sys.modules.pop("main", None)
     main = importlib.import_module("main")
+    # Startup prepares wallet storage relative to the working directory
+    monkeypatch.setenv("XIAN_BOT_WALLET_KEY", "11" * 32)
+    monkeypatch.chdir(tmp_path)
 
     captured: dict[str, Any] = {}
 

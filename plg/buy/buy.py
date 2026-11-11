@@ -266,11 +266,12 @@ class Buy(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.ERROR} {html.escape(str(result))}")
 
-            await self.confirm_tx(xian, buy, tx_result)
+            success, _ = await self.confirm_tx(xian, buy, tx_result)
         else:
+            success = False
             await message.edit_text(f"{con.ERROR} {html.escape(str(buy.message))}")
 
         await context.bot.answer_callback_query(
             update.callback_query.id,
-            f"{con.DONE} Bought {amount} {buy_symbol}"
+            f"{con.DONE} Bought {amount} {buy_symbol}" if success else f"{con.ERROR} Buy failed"
         )

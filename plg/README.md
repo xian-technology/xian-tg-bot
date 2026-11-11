@@ -89,7 +89,9 @@ with shared tables.
 
 `await self.get_wallet(user_id)` returns the user's persisted wallet. Concurrent
 first requests receive the same stored identity. Database lookup or creation
-failures raise `RuntimeError` rather than returning an unpersisted key.
+failures raise `RuntimeError` rather than returning an unpersisted key. Private
+keys are stored encrypted (`wallet_crypto.py`); never read the `wallets.privkey`
+column directly.
 
 ### Key-Value Store
 ```python
@@ -111,8 +113,13 @@ success, result = await self.confirm_tx(client, submission)
 
 SDK submissions and receipts are typed objects. CheckTx acceptance alone does
 not mean the transaction executed successfully. `confirm_tx` uses a supplied
-receipt or waits for one by hash; it never rebroadcasts. An optional callback
-receives `success` and `result` after confirmation. SDK clients use the bot's
+receipt or waits for one by hash; it never rebroadcasts. `success` is `True` or
+`False` for a known outcome and `None` when the lookup failed or timed out (the
+transaction may still execute, so do not treat it as safe to retry). An
+optional callback receives `success` and `result` after confirmation.
+
+Approve token spending for exactly the amount an operation transfers, never an
+open-ended allowance. SDK clients use the bot's
 shared session, which is closed on shutdown.
 
 ### Resources

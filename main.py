@@ -15,12 +15,19 @@ from xian_py.config import TransportConfig
 
 import constants as con
 from config import ConfigManager
+from credentials import WALLET_KEY, SecretError
 from logging_setup import configure_logging, error_context
 from plugin import (
     PluginDependencyError,
     PluginLifecycleError,
     PluginManifest,
     TGBFPlugin,
+)
+from wallet_crypto import (
+    WalletCipher,
+    WalletKeyError,
+    encrypt_plaintext_wallets,
+    load_wallet_cipher,
 )
 from web import WebAppWrapper
 
@@ -35,6 +42,27 @@ class TelegramBot:
         self._stopping = False
         self._xian_session: aiohttp.ClientSession | None = None
         self.kv_locks: dict[Path, asyncio.Lock] = {}
+        self.wallet_cipher: WalletCipher | None = None
+
+    async def prepare_wallet_storage(self) -> bool:
+        """Load the wallet key and encrypt any legacy plaintext wallets.
+
+        The bot does not start without the key: it would otherwise be unable
+        to open existing wallets or would have to create unencrypted ones.
+        """
+        try:
+            self.wallet_cipher = load_wallet_cipher()
+            if self.wallet_cipher is None:
+                logger.error(f"{WALLET_KEY} or {WALLET_KEY}_FILE must be set; refusing to start")
+                return False
+            migrated = await encrypt_plaintext_wallets(Path.cwd() / con.DIR_DAT / con.FILE_DAT, self.wallet_cipher)
+        except (SecretError, WalletKeyError) as exc:
+            logger.error(f"Wallet storage unavailable: {exc}")
+            self.wallet_cipher = None
+            return False
+        if migrated:
+            logger.info(f"Encrypted {migrated} plaintext wallet(s)")
+        return True
 
     async def get_xian_session(self) -> aiohttp.ClientSession:
         if self._xian_session is None or self._xian_session.closed:
@@ -124,6 +152,9 @@ class TelegramBot:
         """Main bot execution loop"""
         try:
             self.cfg = config
+
+            if not await self.prepare_wallet_storage():
+                return
 
             # Init bot
             self.bot = (

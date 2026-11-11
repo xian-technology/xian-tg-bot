@@ -8,9 +8,14 @@ from telegram.ext import CallbackContext, CommandHandler
 from xian_py.wallet import Wallet
 
 import constants as con
+from credentials import FAUCET_PRIVKEY, SecretError, read_secret
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import parse_amount, submission_accepted
+
+
+class FaucetNotConfiguredError(RuntimeError):
+    """No faucet signing key is available."""
 
 
 class Testnet(TGBFPlugin):
@@ -130,7 +135,7 @@ class Testnet(TGBFPlugin):
                     return
 
                 success, result = await self.confirm_tx(testnet, send)
-                if not success:
+                if success is False:
                     await message.edit_text(f"{con.ERROR} Claim not confirmed: {html.escape(str(result))}")
                     return
 
@@ -146,10 +151,19 @@ class Testnet(TGBFPlugin):
             current_dt_str = datetime.now(tz=tz).strftime("%Y-%m-%dT%H:%M:%S")
             await self.kv_set(user_address, current_dt_str)
 
+            if success is None:
+                # The payment may still execute, so the claim counts as made
+                await message.edit_text(f"{con.WARNING} {html.escape(str(result))}")
+                return
+
             await message.edit_text(
                 f"{con.INFO} Claimed {amount} tXIAN to your bot wallet"
             )
 
+        except (FaucetNotConfiguredError, SecretError) as e:
+            self.log.bind(**error_context(e), handler='handle_claim').error('Faucet key unavailable')
+            await self.notify(f"Faucet key unavailable: {html.escape(str(e))}")
+            await message.edit_text(f"{con.ERROR} The faucet is not configured")
         except ValueError as e:
             await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
         except Exception as e:
@@ -223,18 +237,17 @@ class Testnet(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 
     async def get_testnet_instance(self):
-        """Get testnet instance with faucet wallet"""
+        """Get testnet instance with the faucet wallet from FAUCET_PRIVKEY"""
+        from_privkey = read_secret(FAUCET_PRIVKEY)
+        if not from_privkey:
+            raise FaucetNotConfiguredError(f"{FAUCET_PRIVKEY} or {FAUCET_PRIVKEY}_FILE is not set")
+
         testnet_node = self.cfg.get('testnet_node')
         chain_id = self.cfg.get('chain_id')
-        from_privkey = self.cfg.get('privkey')
         from_wallet = Wallet(from_privkey)
 
-        testnet = await self.get_xian(testnet_node, chain_id, from_wallet)
-
-        if chain_id is None:
-            self.cfg.set(testnet.chain_id, 'chain_id')
-
-        return testnet
+        # Without a configured chain_id the client discovers it from the node
+        return await self.get_xian(testnet_node, chain_id, from_wallet)
 
     async def validate_claim(self, testnet, address: str):
         """Validate if address can claim tokens"""

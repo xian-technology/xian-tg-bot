@@ -201,7 +201,8 @@ class Sell(TGBFPlugin):
 
         if approved_amount < amount:
             try:
-                approve = await xian.approve(contract, token=sell_contract)
+                # Approve exactly the amount being sold
+                approve = await xian.approve(contract, token=sell_contract, amount=amount)
                 self.log.bind(**transaction_context(approve)).debug("Transaction response received")
             except Exception as e:
                 self.log.bind(**error_context(e), handler='confirm_sell_callback').error('Confirm sell callback failed')
@@ -265,11 +266,12 @@ class Sell(TGBFPlugin):
                 else:
                     await message.edit_text(f"{con.ERROR} {html.escape(str(result))}")
 
-            await self.confirm_tx(xian, sell, tx_result)
+            success, _ = await self.confirm_tx(xian, sell, tx_result)
         else:
+            success = False
             await message.edit_text(f"{con.ERROR} {html.escape(str(sell.message))}")
 
         await context.bot.answer_callback_query(
             update.callback_query.id,
-            f"{con.DONE} Sold {amount} {sell_symbol}"
+            f"{con.DONE} Sold {amount} {sell_symbol}" if success else f"{con.ERROR} Sell failed"
         )

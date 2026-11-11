@@ -61,11 +61,13 @@ async def confirm_submission(
     submission: TransactionSubmission,
     *,
     timeout: float = 30,
-) -> tuple[bool, Any]:
+) -> tuple[bool | None, Any]:
     """Resolve finality by hash, including transactions finalized before this call.
 
     A CheckTx acceptance is not execution success. Confirmation never resubmits
-    a transaction, including when the lookup times out.
+    a transaction, including when the lookup times out. Returns ``True`` or
+    ``False`` for a known outcome and ``None`` when an accepted transaction's
+    outcome is unknown (it may still execute).
     """
     if not submission_accepted(submission):
         return False, submission.message or "Transaction was not accepted"
@@ -75,7 +77,7 @@ async def confirm_submission(
             submission.tx_hash, timeout_seconds=timeout,
         )
     except (TimeoutError, XianException) as exc:
-        return False, (
+        return None, (
             f"Unable to confirm transaction {submission.tx_hash}: {exc or type(exc).__name__}. "
             "It may still complete; check the explorer before retrying."
         )

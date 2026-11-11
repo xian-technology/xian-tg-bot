@@ -96,7 +96,7 @@ class Lottery(TGBFPlugin):
             if amount <= 0:
                 raise ValueError('Amount can not be negative')
 
-            if amount.is_integer():
+            if amount == amount.to_integral_value():
                 amount = int(amount)
         except Exception as e:
             await update.message.reply_text(
@@ -115,7 +115,8 @@ class Lottery(TGBFPlugin):
 
         if approved_amount < amount:
             try:
-                approve = await xian.approve(lottery_contract, token=token_contract)
+                # Approve exactly the deposit
+                approve = await xian.approve(lottery_contract, token=token_contract, amount=amount)
                 self.log.bind(**transaction_context(approve)).debug("Transaction response received")
             except Exception as e:
                 self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')

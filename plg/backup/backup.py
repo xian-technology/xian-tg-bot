@@ -8,6 +8,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from credentials import secret_files
 from logging_setup import error_context
 from plugin import TGBFPlugin
 
@@ -46,6 +47,11 @@ class Backup(TGBFPlugin):
             '.DS_Store',
             '.zip'  # Exclude ZIP files to prevent recursive backups
         }
+
+        # Never ship secret files (e.g. the wallet encryption key); without
+        # them the encrypted wallets in the database cannot be opened
+        if Path(path).resolve() in secret_files():
+            return True
 
         # Check if the path contains any excluded directory
         path_parts = Path(path).parts

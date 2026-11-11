@@ -901,7 +901,12 @@ class TGBFPlugin:
 
     async def get_wallet(self, user_id, db_name="global.db") -> Wallet:
         """ Return address and private key for given user_id.
-        If no wallet exists then it will be created. """
+        If no wallet exists then it will be created. Private keys are
+        stored encrypted (see wallet_crypto). """
+
+        cipher = getattr(self.tgb, "wallet_cipher", None)
+        if cipher is None:
+            raise RuntimeError("Wallet encryption key is not configured")
 
         # Check if user already has a wallet
         sql = await self.get_resource_global("select_wallet.sql")
@@ -911,7 +916,7 @@ class TGBFPlugin:
 
         # User already has a wallet
         if res["data"]:
-            return Wallet(res["data"][0][2])
+            return Wallet(cipher.decrypt(user_id, res["data"][0][2]))
 
         # Create new wallet
         wallet = Wallet()
@@ -921,7 +926,7 @@ class TGBFPlugin:
             await self.get_resource_global("insert_wallet.sql"),
             user_id,
             wallet.public_key,
-            wallet.private_key,
+            cipher.encrypt(user_id, wallet.private_key),
             db_name=db_name)
         if not saved["success"]:
             raise RuntimeError("Wallet creation failed")
@@ -931,7 +936,7 @@ class TGBFPlugin:
         persisted = await self.exec_sql_global(sql, user_id, db_name=db_name)
         if not persisted["success"] or not persisted["data"]:
             raise RuntimeError("Wallet lookup failed after creation")
-        wallet = Wallet(persisted["data"][0][2])
+        wallet = Wallet(cipher.decrypt(user_id, persisted["data"][0][2]))
 
         self.log.info(f'Address {wallet.public_key} created for user ID {user_id}')
         return wallet
@@ -955,7 +960,7 @@ class TGBFPlugin:
         return xian
 
     async def confirm_tx(self, client: XianAsync, submission: TransactionSubmission,
-                         callback: Callable | None = None) -> tuple[bool, Any]:
+                         callback: Callable | None = None) -> tuple[bool | None, Any]:
         result = await confirm_submission(client, submission)
         if callback:
             callback_result = callback(success=result[0], result=result[1])

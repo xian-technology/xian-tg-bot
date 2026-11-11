@@ -41,7 +41,34 @@ Create a `.env`:
 TG_TOKEN=your_bot_token
 LOG_LEVEL=INFO        # DEBUG, INFO, WARNING, ERROR
 LOG_INTO_FILE=true
+XIAN_BOT_WALLET_KEY_FILE=/run/secrets/xian-bot-wallet-key
+# XIAN_BOT_FAUCET_PRIVKEY_FILE=/run/secrets/xian-bot-faucet-key   # only for /testnet claim
 ```
+
+### Secrets
+
+Signing keys never live in tracked configuration. Each secret `NAME` is read
+from the variable `NAME` or from the file named by `NAME_FILE` (setting both is
+an error; surrounding whitespace is ignored). Prefer the `_FILE` form and keep
+the file outside the bot directory with mode `0600`.
+
+- `XIAN_BOT_WALLET_KEY` (required): 32 random bytes as 64 hex characters, e.g.
+  `python3 -c "import secrets; print(secrets.token_hex(32))"`. Users' wallet
+  private keys are stored in `dat/global.db` encrypted with
+  XChaCha20-Poly1305 under this key, bound to the Telegram user id. The bot
+  refuses to start without it. On startup, plaintext rows from older versions
+  are encrypted in one transaction; startup also fails if the key does not open
+  the rows that are already encrypted. Losing this key makes every stored
+  wallet unrecoverable, so back it up separately from the database.
+- `XIAN_BOT_FAUCET_PRIVKEY` (optional): private key of the `/testnet claim`
+  faucet wallet. Without it, claims are refused. The faucet's `chain_id` is
+  discovered from `testnet_node` unless set in `plg/testnet/cfg/testnet.json`.
+
+`/backup` archives contain only encrypted wallets: `.env`, dotfiles and any
+configured `*_FILE` secret are excluded.
+
+Older revisions committed a faucet private key in `plg/testnet/cfg/testnet.json`.
+Treat that key as public: move any funds to a newly generated faucet key.
 
 Run the bot:
 

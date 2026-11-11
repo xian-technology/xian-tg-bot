@@ -12,12 +12,13 @@ from xian_py.wallet import Wallet
 import constants
 from config import ConfigManager
 from plugin import TGBFPlugin
+from wallet_crypto import WalletCipher
 
 
 @pytest.fixture
 def db_plugin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TGBFPlugin:
     monkeypatch.setattr(constants, "DIR_DAT", tmp_path / "data")
-    bot = SimpleNamespace(cfg=ConfigManager(tmp_path / "global.json"))
+    bot = SimpleNamespace(cfg=ConfigManager(tmp_path / "global.json"), wallet_cipher=WalletCipher.from_hex("11" * 32))
     plugin = TGBFPlugin(bot)
     plugin.notify = AsyncMock()
     return plugin
@@ -51,7 +52,7 @@ async def test_concurrent_first_use_returns_one_persisted_wallet(
     first, second = await asyncio.gather(db_plugin.get_wallet(23), db_plugin.get_wallet(23))
     rows = await original("SELECT user_id, address, privkey FROM wallets")
     assert rows["success"] and len(rows["data"]) == 1
-    persisted = Wallet(rows["data"][0][2])
+    persisted = Wallet(db_plugin.tgb.wallet_cipher.decrypt(23, rows["data"][0][2]))
     assert first.public_key == second.public_key == persisted.public_key
     assert first.private_key == second.private_key == persisted.private_key
     assert (await db_plugin.get_wallet(23)).private_key == persisted.private_key

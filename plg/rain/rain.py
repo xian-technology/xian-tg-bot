@@ -196,10 +196,13 @@ class Rain(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
-        if approved_amount < amount_total:
+        # Approve exactly what this distribution transfers
+        amount_needed = amount_single * len(addresses)
+
+        if approved_amount < amount_needed:
             try:
                 # Approve sending tokens to contract
-                approve = await xian.approve(multisend_contract, token=contract)
+                approve = await xian.approve(multisend_contract, token=contract, amount=amount_needed)
                 self.log.bind(**transaction_context(approve)).debug("Transaction response received")
 
                 if not submission_accepted(approve):

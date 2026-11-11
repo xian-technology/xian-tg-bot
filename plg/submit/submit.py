@@ -11,6 +11,17 @@ from plugin import TGBFPlugin
 from transactions import submission_accepted
 
 
+def parse_caption(caption: str | None) -> dict[str, str]:
+    """Parse ``key=value`` pairs separated by spaces or commas."""
+    params = {}
+    for param in (caption or "").replace(',', ' ').split():
+        key, separator, value = param.partition('=')
+        if not separator or not key or not value or '=' in value:
+            raise ValueError(f"Invalid caption parameter: {param!r}")
+        params[key] = value
+    return params
+
+
 class Submit(TGBFPlugin):
 
     async def init(self):
@@ -32,20 +43,16 @@ class Submit(TGBFPlugin):
 
         name = Path(update.message.document.file_name.lower()).stem
 
-        params = dict()
-        caption = update.message.caption
+        try:
+            params = parse_caption(update.message.caption)
+        except ValueError:
+            await update.message.reply_text(
+                f"{con.ERROR} Caption must be <code>key=value</code> pairs, e.g. <code>name=con_token</code>"
+            )
+            return
 
-        if caption:
-            caption = caption.replace(',', ' ')
-
-            for param in caption.split(' '):
-                p_lst = param.split('=')
-                key = p_lst[0].strip()
-                value = p_lst[1].strip()
-                params[key] = value
-
-            if 'name' in params:
-                name = params['name']
+        if 'name' in params:
+            name = params['name']
 
         # Validate name
         if not name.startswith('con_'):
