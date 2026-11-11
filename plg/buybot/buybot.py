@@ -12,6 +12,7 @@ import constants as con
 import utils as utl
 from logging_setup import error_context
 from plugin import TGBFPlugin
+from transactions import trade_amount
 
 
 class Buybot(TGBFPlugin):
@@ -475,20 +476,11 @@ class Buybot(TGBFPlugin):
                             # For Swap events, try to determine the exact function that was called
                             swap_data = event.get('data', {})
 
-                            # Safely get values and convert to float if they're strings
-                            amount0In = swap_data.get('amount0In', 0)
-                            amount0In = float(amount0In) if isinstance(amount0In, str) else amount0In
+                            amount0In = trade_amount(swap_data.get('amount0In', 0))
+                            amount0Out = trade_amount(swap_data.get('amount0Out', 0))
+                            amount1In = trade_amount(swap_data.get('amount1In', 0))
+                            amount1Out = trade_amount(swap_data.get('amount1Out', 0))
 
-                            amount0Out = swap_data.get('amount0Out', 0)
-                            amount0Out = float(amount0Out) if isinstance(amount0Out, str) else amount0Out
-
-                            amount1In = swap_data.get('amount1In', 0)
-                            amount1In = float(amount1In) if isinstance(amount1In, str) else amount1In
-
-                            amount1Out = swap_data.get('amount1Out', 0)
-                            amount1Out = float(amount1Out) if isinstance(amount1Out, str) else amount1Out
-
-                            # Compare the float values
                             if amount0In > 0 and not amount0Out > 0:
                                 # Token0 -> Token1 swap
                                 function = "swapExactTokenForToken"
@@ -507,20 +499,12 @@ class Buybot(TGBFPlugin):
                             # Determine tokens being swapped (with proper type conversion)
                             src_token = "currency"
 
-                            # Safely get values and convert to float if they're strings
-                            amount0In = swap_data.get('amount0In', 0)
-                            amount0In = float(amount0In) if isinstance(amount0In, str) else amount0In
-
-                            amount1In = swap_data.get('amount1In', 0)
-                            amount1In = float(amount1In) if isinstance(amount1In, str) else amount1In
-
-                            # Compare the float values
                             if amount0In > 0:
                                 src_token = "con_usdc"
 
                             # Format amounts as fixed numbers (keep as strings)
-                            amount_in = str(swap_data.get('amount0In', 0) or swap_data.get('amount1In', 0))
-                            amount_out = str(swap_data.get('amount0Out', 0) or swap_data.get('amount1Out', 0))
+                            amount_in = format(amount0In or amount1In, 'f')
+                            amount_out = format(amount0Out or amount1Out, 'f')
 
                             arguments = {
                                 "amountIn": {"__fixed__": amount_in},

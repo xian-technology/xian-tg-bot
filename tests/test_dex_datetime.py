@@ -12,8 +12,8 @@ def _swap_event(created: str) -> dict[str, Any]:
             "created": created,
             "data": {
                 "amount0In": 0,
-                "amount0Out": 2,
-                "amount1In": 4,
+                "amount0Out": {"__fixed__": "2.25"},
+                "amount1In": {"__fixed__": "4.5"},
                 "amount1Out": 0,
             },
         }
@@ -52,7 +52,7 @@ def test_price_24h_volume_accepts_z_timestamps() -> None:
         base_is_token0=True,
     )
 
-    assert volume == pytest.approx(2)
+    assert volume == pytest.approx(2.25)
 
 
 def test_price_candles_accept_z_timestamps() -> None:

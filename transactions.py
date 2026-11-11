@@ -1,5 +1,6 @@
 """Transaction acceptance and finality for bot commands using the current SDK."""
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from fractions import Fraction
 from typing import Any
@@ -8,6 +9,7 @@ from xian_py import XianAsync
 from xian_py.exception import XianException
 from xian_py.models import TransactionSubmission
 from xian_runtime_types.decimal import canonical_fixed
+from xian_runtime_types.numeric_wire import decode_wire_numbers
 
 
 def parse_amount(text: str | int) -> Decimal:
@@ -22,6 +24,21 @@ def encode_trade_amount(amount: Decimal) -> bytes:
 def decode_trade_amount(stored: bytes | str | float | int) -> Decimal:
     text = stored.decode("ascii") if isinstance(stored, bytes) else str(stored)
     return parse_amount(text)
+
+
+def trade_amount(value: Any) -> Decimal:
+    """Read an SDK receipt value or a numeric field from an indexed trade."""
+    if isinstance(value, dict):
+        value = decode_wire_numbers(value)
+    elif isinstance(value, float):
+        # Historical index rows may contain an untagged fractional number.
+        value = str(value)
+    return Decimal(canonical_fixed(value))
+
+
+def trade_deadline() -> dict[str, list[int]]:
+    expires = datetime.now(UTC) + timedelta(minutes=5)
+    return {"__time__": [*expires.timetuple()[:6], expires.microsecond]}
 
 
 def split_amount(total: Decimal, recipients: int) -> Decimal:

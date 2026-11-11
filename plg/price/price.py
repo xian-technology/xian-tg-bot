@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext, CommandHandler
 import constants as con
 from logging_setup import error_context
 from plugin import TGBFPlugin
+from transactions import trade_amount
 from utils import parse_utc_datetime, utc_now
 
 
@@ -251,10 +252,10 @@ class Price(TGBFPlugin):
             # Parse trade data
             swap_data = json.loads(node['data']) if isinstance(node['data'], str) else node['data']
 
-            amount0_in = float(swap_data.get('amount0In', 0) or 0)
-            amount0_out = float(swap_data.get('amount0Out', 0) or 0)
-            amount1_in = float(swap_data.get('amount1In', 0) or 0)
-            amount1_out = float(swap_data.get('amount1Out', 0) or 0)
+            amount0_in = float(trade_amount(swap_data.get('amount0In', 0) or 0))
+            amount0_out = float(trade_amount(swap_data.get('amount0Out', 0) or 0))
+            amount1_in = float(trade_amount(swap_data.get('amount1In', 0) or 0))
+            amount1_out = float(trade_amount(swap_data.get('amount1Out', 0) or 0))
 
             # Calculate volume for this trade in base token
             if amount0_out > 0 and amount1_in > 0:
@@ -358,10 +359,10 @@ class Price(TGBFPlugin):
             timestamp = parse_utc_datetime(timestamp_str)
 
             # Calculate price
-            amount0_in = float(swap_data.get('amount0In', 0) or 0)
-            amount0_out = float(swap_data.get('amount0Out', 0) or 0)
-            amount1_in = float(swap_data.get('amount1In', 0) or 0)
-            amount1_out = float(swap_data.get('amount1Out', 0) or 0)
+            amount0_in = float(trade_amount(swap_data.get('amount0In', 0) or 0))
+            amount0_out = float(trade_amount(swap_data.get('amount0Out', 0) or 0))
+            amount1_in = float(trade_amount(swap_data.get('amount1In', 0) or 0))
+            amount1_out = float(trade_amount(swap_data.get('amount1Out', 0) or 0))
 
             price = None
             volume = 0

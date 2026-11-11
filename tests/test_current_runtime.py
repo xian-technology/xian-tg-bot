@@ -303,3 +303,39 @@ def test_trade_amount_survives_existing_sqlite_real_affinity() -> None:
     assert decode_trade_amount(stored) == exact
     assert decode_trade_amount(1.25) == parse_amount("1.25")
     assert split_amount(parse_amount("1"), 6) == parse_amount("0.1666")
+
+
+@pytest.mark.parametrize("side", ["buy", "sell"])
+async def test_trade_callback_submits_deadline_and_formats_typed_receipt(side: str) -> None:
+    import json
+    from dataclasses import replace
+
+    from xian_runtime_types.numeric_wire import decode_wire_numbers
+
+    from plg.buy.buy import Buy
+    from plg.sell.sell import Sell
+
+    plugin = plugin_instance(Buy if side == "buy" else Sell)
+    plugin._name = side
+    plugin._cfg = json.loads((Path(__file__).parents[1] / "plg" / side / "cfg" / f"{side}.json").read_text())
+    plugin._cfg_global = SimpleNamespace(get=lambda *args: "http://127.0.0.1:8080")
+    plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
+    plugin.get_wallet = AsyncMock()
+    typed_result = decode_wire_numbers([{"__fixed__": "2.500000000000000000000000000001"}, 3])
+    client = SimpleNamespace(
+        send_tx=AsyncMock(return_value=submission()),
+        get_approved_amount=AsyncMock(return_value=100),
+        wait_for_tx=AsyncMock(return_value=replace(receipt(), execution={"status": 0, "result": typed_result})),
+    )
+    plugin.get_xian = AsyncMock(return_value=client)
+    message = SimpleNamespace(edit_text=AsyncMock())
+    context = SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock()))
+    update = SimpleNamespace(effective_message=message, effective_user=SimpleNamespace(id=7),
+                             callback_query=SimpleNamespace(data=f"{side}_1", id="1"))
+
+    await getattr(plugin, f"confirm_{side}_callback")(update, context)
+
+    call = client.send_tx.call_args
+    assert call.args == ("con_dex_helper", side)
+    assert len(call.kwargs["kwargs"]["deadline"]["__time__"]) == 7
+    assert "2.500000000000000000000000000001" in message.edit_text.call_args.args[0]

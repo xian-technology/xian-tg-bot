@@ -5,7 +5,14 @@ import constants as con
 import utils as utl
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import decode_trade_amount, encode_trade_amount, parse_amount, submission_accepted
+from transactions import (
+    decode_trade_amount,
+    encode_trade_amount,
+    parse_amount,
+    submission_accepted,
+    trade_amount,
+    trade_deadline,
+)
 
 
 class Sell(TGBFPlugin):
@@ -219,7 +226,8 @@ class Sell(TGBFPlugin):
                     "sell_token": sell_contract,
                     "buy_token": buy_contract,
                     "amount": amount,
-                    "slippage": 5
+                    "slippage": 5,
+                    "deadline": trade_deadline(),
                 }
             )
             self.log.bind(**transaction_context(sell)).debug("Transaction response received")
@@ -232,24 +240,18 @@ class Sell(TGBFPlugin):
         tx_hash = sell.tx_hash
 
         if submission_accepted(sell):
-            async def tx_result(success: str, result: str):
+            async def tx_result(success: bool, result):
                 if success:
                     explorer_url = self.cfg_global.get('xian', 'explorer')
                     link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
 
-                    result = result.strip("'()").strip()
-                    values = result.split(",")
-
-                    sold = float(values[0].strip())
-                    bought = float(values[1].strip())
+                    sold, bought = (trade_amount(value) for value in result)
                     price = utl.format_float(bought / sold)
-                    sold = utl.format_float(sold)
-                    bought = utl.format_float(bought)
 
                     await message.edit_text(
                         f"<code>"
-                        f"← Sold {sold} {sell_symbol}\n"
-                        f"→ Bought {bought} {buy_symbol}\n"
+                        f"← Sold {sold:f} {sell_symbol}\n"
+                        f"→ Bought {bought:f} {buy_symbol}\n"
                         f"$ Price {price}"
                         f"</code>\n{link}",
                         disable_web_page_preview=True
