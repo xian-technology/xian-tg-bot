@@ -1,3 +1,4 @@
+import html
 import json
 from datetime import timedelta
 
@@ -199,7 +200,7 @@ class Price(TGBFPlugin):
             await message.edit_text(message_text)
 
         except Exception as e:
-            await message.edit_text(f"{con.ERROR} Error fetching price: {e}")
+            await message.edit_text(f"{con.ERROR} Error fetching price: {html.escape(str(e))}")
             self.log.bind(**error_context(e), handler='price_callback').error('Price callback failed')
             await self.notify(e)
 

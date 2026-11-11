@@ -156,6 +156,11 @@ def parse_utc_datetime(value: str | datetime) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def sqlite_utc(value: datetime) -> str:
+    """Render a UTC instant in SQLite's CURRENT_TIMESTAMP text format."""
+    return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def build_menu(
     buttons: list[Any],
     n_cols: int = 1,

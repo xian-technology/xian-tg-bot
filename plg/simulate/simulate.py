@@ -1,3 +1,4 @@
+import html
 import json
 from decimal import Decimal
 
@@ -58,10 +59,9 @@ class Simulate(TGBFPlugin):
             simulate = await simulate_tx_async(node_url, payload, vm_profile="xian_vm_v2")
             self.log.bind(**transaction_context(simulate)).debug("Transaction response received")
         except Exception as e:
-            msg = f"SIMULATE Error: {e}"
             self.log.bind(**error_context(e), handler='simulate_callback').error('Simulate callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         status = True if simulate['status'] == 0 else False
@@ -72,7 +72,7 @@ class Simulate(TGBFPlugin):
         msg = (f'<b>Result of tx simulation</b>\n\n'
                f'Success:\n<pre>{status}</pre>\n\n'
                f'Chi used:\n<pre>{chi}</pre>\n\n'
-               f'Returned result:\n<pre>{result}</pre>\n\n'
+               f'Returned result:\n<pre>{html.escape(str(result))}</pre>\n\n'
                f'State changes:\n<pre>{state}</pre>\n\n')
 
         await message.edit_text(msg)

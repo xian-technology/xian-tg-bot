@@ -1,3 +1,5 @@
+import html
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
@@ -134,10 +136,13 @@ class Buy(TGBFPlugin):
         id = utl.id()
 
         # Store transaction data in SQLite
-        await self.exec_sql(
+        stored = await self.exec_sql(
             await self.get_resource("insert_buy.sql"),
             id, user_id, buy_contract, buy_symbol, sell_contract, sell_symbol, encode_trade_amount(amount)
         )
+        if not stored["success"]:
+            await message.edit_text(f"{con.ERROR} Could not prepare order, please try again")
+            return
 
         await message.edit_text(
             f"{con.MONEY} Buy {amount} {buy_symbol} for {sell_symbol}",
@@ -160,11 +165,15 @@ class Buy(TGBFPlugin):
         callback_data = update.callback_query.data.split('_')
         id = callback_data[1]
 
-        # Retrieve transaction data from DB
-        select_sql = await self.get_resource('select_buy.sql')
-        res = await self.exec_sql(select_sql, id)
+        # Claim the pending order: a confirmation executes at most once, and
+        # only for the user who created it
+        claim_sql = await self.get_resource('claim_buy.sql')
+        res = await self.exec_sql(claim_sql, id, update.effective_user.id)
         if not res["success"] or not res["data"]:
-            await update.effective_message.edit_text(f"{con.ERROR} Transaction data not found")
+            await context.bot.answer_callback_query(
+                update.callback_query.id,
+                f"{con.ERROR} Order not available"
+            )
             return
 
         row = res["data"][0]
@@ -174,9 +183,6 @@ class Buy(TGBFPlugin):
         sell_contract = row[4]
         sell_symbol = row[5]
         amount = decode_trade_amount(row[6])
-
-        if update.effective_user.id != user_id:
-            return
 
         wallet = await self.get_wallet(user_id)
         xian = await self.get_xian(wallet=wallet)
@@ -191,7 +197,7 @@ class Buy(TGBFPlugin):
         except Exception as e:
             self.log.bind(**error_context(e), handler='confirm_buy_callback').error('Confirm buy callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         if approved_amount < amount:
@@ -201,7 +207,7 @@ class Buy(TGBFPlugin):
             except Exception as e:
                 self.log.bind(**error_context(e), handler='confirm_buy_callback').error('Confirm buy callback failed')
                 await self.notify(e)
-                await message.edit_text(f"{con.ERROR} {e}")
+                await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
                 return
 
             tx_hash = approve.tx_hash
@@ -210,13 +216,13 @@ class Buy(TGBFPlugin):
                 try:
                     success, result = await self.confirm_tx(xian, approve)
                     if not success:
-                        await message.edit_text(f"{con.ERROR} Approval failed: {result}")
+                        await message.edit_text(f"{con.ERROR} Approval failed: {html.escape(str(result))}")
                         return
                 except TimeoutError:
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await message.edit_text(f"{con.ERROR} {approve.message}")
+                await message.edit_text(f"{con.ERROR} {html.escape(str(approve.message))}")
                 return
 
         try:
@@ -235,7 +241,7 @@ class Buy(TGBFPlugin):
         except Exception as e:
             self.log.bind(**error_context(e), handler='confirm_buy_callback').error('Confirm buy callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         tx_hash = buy.tx_hash
@@ -258,11 +264,11 @@ class Buy(TGBFPlugin):
                         disable_web_page_preview=True
                     )
                 else:
-                    await message.edit_text(f"{con.ERROR} {result}")
+                    await message.edit_text(f"{con.ERROR} {html.escape(str(result))}")
 
             await self.confirm_tx(xian, buy, tx_result)
         else:
-            await message.edit_text(f"{con.ERROR} {buy.message}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(buy.message))}")
 
         await context.bot.answer_callback_query(
             update.callback_query.id,

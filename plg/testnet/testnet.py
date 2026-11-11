@@ -1,3 +1,5 @@
+import asyncio
+import html
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -96,12 +98,22 @@ class Testnet(TGBFPlugin):
         """Handle claiming tokens to user's bot wallet"""
         message = await update.message.reply_text(f"{con.WAIT} Processing claim request...")
 
+        # Eligibility is checked before paying and recorded only after
+        # confirmation, so one address's claims must not overlap.
+        user_address = user_wallet.public_key
+        async with self.claim_lock(user_address):
+            await self._claim(message, user_address)
+
+    def claim_lock(self, address: str) -> asyncio.Lock:
+        locks = self.__dict__.setdefault("_claim_locks", {})
+        return locks.setdefault(address, asyncio.Lock())
+
+    async def _claim(self, message, user_address: str):
         try:
             # Get testnet instance with faucet wallet
             testnet = await self.get_testnet_instance()
 
             # Check if user can claim
-            user_address = user_wallet.public_key
             await self.validate_claim(testnet, user_address)
 
             # Amount to send
@@ -114,19 +126,19 @@ class Testnet(TGBFPlugin):
                 if not submission_accepted(send):
                     self.log.bind(**transaction_context(send)).error("Faucet transaction rejected")
                     await self.notify("Faucet transaction rejected; inspect transaction metadata in the log")
-                    await message.edit_text(f"{con.ERROR} Transaction failed: {send.message}")
+                    await message.edit_text(f"{con.ERROR} Transaction failed: {html.escape(str(send.message))}")
                     return
 
                 success, result = await self.confirm_tx(testnet, send)
                 if not success:
-                    await message.edit_text(f"{con.ERROR} Claim not confirmed: {result}")
+                    await message.edit_text(f"{con.ERROR} Claim not confirmed: {html.escape(str(result))}")
                     return
 
                 self.log.bind(**transaction_context(send)).debug("Transaction response received")
             except Exception as e:
                 self.log.bind(**error_context(e), handler='handle_claim').error('Handle claim failed')
                 await self.notify(e)
-                await message.edit_text(f"{con.ERROR} {str(e)}")
+                await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
                 return
 
             # Save claim time
@@ -139,7 +151,7 @@ class Testnet(TGBFPlugin):
             )
 
         except ValueError as e:
-            await message.edit_text(f"{con.ERROR} {str(e)}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
         except Exception as e:
             self.log.bind(**error_context(e), handler='handle_claim').error('Handle claim failed')
             await self.notify(e)
@@ -181,7 +193,7 @@ class Testnet(TGBFPlugin):
             except Exception as e:
                 self.log.bind(**error_context(e), handler='handle_send').error('Handle send failed')
                 await self.notify(e)
-                await message.edit_text(f"{con.ERROR} {str(e)}")
+                await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
                 return
 
             tx_hash = send.tx_hash
@@ -199,11 +211,11 @@ class Testnet(TGBFPlugin):
                     )
                 else:
                     await message.edit_text(
-                        f"{con.ERROR} {result}",
+                        f"{con.ERROR} {html.escape(str(result))}",
                         disable_web_page_preview=True
                     )
             else:
-                await message.edit_text(f"{con.STOP} {send.message}")
+                await message.edit_text(f"{con.STOP} {html.escape(str(send.message))}")
 
         except Exception as e:
             self.log.bind(**error_context(e), handler='handle_send').error('Handle send failed')

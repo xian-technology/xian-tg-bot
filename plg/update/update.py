@@ -1,3 +1,4 @@
+import html
 import shutil
 from pathlib import Path
 from zipfile import ZipFile
@@ -91,4 +92,4 @@ class Update(TGBFPlugin):
             await update.message.reply_text(f"{con.DONE} Plugin successfully loaded")
         except Exception as e:
             self.log.bind(**error_context(e), handler='update_callback').error('Update callback failed')
-            await update.message.reply_text(f"{con.ERROR} {e}")
+            await update.message.reply_text(f"{con.ERROR} {html.escape(str(e))}")

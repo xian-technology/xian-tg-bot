@@ -1,6 +1,8 @@
+import html
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
-from xian_py.transaction import simulate_tx_async
+from xian_py.wallet import Wallet
 
 import constants as con
 from logging_setup import error_context, transaction_context
@@ -9,6 +11,27 @@ from transactions import parse_amount, submission_accepted
 
 
 class Send(TGBFPlugin):
+
+    async def resolve_name(self, xian, name: str) -> str | None:
+        """Return the address registered for an XNS name, or None.
+
+        A failed lookup reports its error as the simulation result, so only a
+        successful lookup that yields a valid address may become a recipient.
+        """
+        try:
+            lookup = await xian.simulate(
+                self.cfg.get('xns_contract'),
+                self.cfg.get('xns_function'),
+                {"name": name},
+            )
+        except Exception as e:
+            self.log.bind(**error_context(e), handler='resolve_name').warning('Name lookup failed')
+            return None
+
+        address = lookup.get("result")
+        if lookup.get("status") != 0 or not isinstance(address, str) or not Wallet.is_valid_key(address):
+            return None
+        return address
 
     async def init(self):
         await self.add_handler(CommandHandler(self.handle, self.send_callback, block=False))
@@ -95,24 +118,14 @@ class Send(TGBFPlugin):
                 await message.edit_text(msg)
                 return
 
-        # Check if recipient is an address
+        # Otherwise the recipient must be an address or a registered XNS name
         elif not from_wallet.is_valid_key(to):
-            payload = {
-                "contract": self.cfg.get('xns_contract'),
-                "function": self.cfg.get('xns_function'),
-                "kwargs": {"name": to},
-                "sender": from_wallet.public_key
-            }
+            to = await self.resolve_name(xian, to)
 
-            # Check if recipient is an XNS name
-            sim = await simulate_tx_async(self.cfg_global.get('xian', 'node'), payload, vm_profile="xian_vm_v2")
-
-            if sim['result'] == 'None':
+            if to is None:
                 msg = f"{con.ERROR} Not a valid address, contract or XNS name!"
                 await message.edit_text(msg)
                 return
-            else:
-                to = sim['result'].replace("'", '')
 
         await message.edit_text(f"{con.WAIT} Sending {ticker} ...")
 
@@ -121,10 +134,9 @@ class Send(TGBFPlugin):
             send = await xian.send(amount, to, token=contract)
             self.log.bind(**transaction_context(send)).debug("Transaction response received")
         except Exception as e:
-            msg = f"SEND Error: {e}"
             self.log.bind(**error_context(e), handler='send_callback').error('Send callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         tx_hash = send.tx_hash
@@ -140,8 +152,8 @@ class Send(TGBFPlugin):
                         disable_web_page_preview=True
                     )
                 else:
-                    await message.edit_text(f"{con.STOP} {result}")
+                    await message.edit_text(f"{con.STOP} {html.escape(str(result))}")
 
             await self.confirm_tx(xian, send, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {send.message}")
+            await message.edit_text(f"{con.STOP} {html.escape(str(send.message))}")

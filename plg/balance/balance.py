@@ -1,3 +1,5 @@
+import html
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
@@ -45,7 +47,7 @@ class Balance(TGBFPlugin):
                     balances += f'<code>{balance_str}</code>\n'
 
         except Exception as e:
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             self.log.bind(**error_context(e), handler='balance_callback').error('Balance callback failed')
             await self.notify(e)
             return
@@ -54,4 +56,5 @@ class Balance(TGBFPlugin):
 
     # TODO: Remove decimals if not present etc
     def format_balance(self, ticker: str, balance: str | float, decimals: int):
-        return f"{ticker}: {balance:.{decimals}f}"
+        # Token symbols come from on-chain metadata and are rendered as HTML text
+        return f"{html.escape(str(ticker))}: {balance:.{decimals}f}"

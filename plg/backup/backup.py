@@ -1,3 +1,4 @@
+import html
 import os
 import time
 import zipfile
@@ -118,7 +119,7 @@ class Backup(TGBFPlugin):
 
             except Exception as e:
                 self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
-                await status_message.edit_text(f"{con.ERROR} Failed to create ZIP: {str(e)}")
+                await status_message.edit_text(f"{con.ERROR} Failed to create ZIP: {html.escape(str(e))}")
                 if filepath.exists():
                     filepath.unlink()
                 return
@@ -147,7 +148,7 @@ class Backup(TGBFPlugin):
             except Exception as e:
                 self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
                 await status_message.edit_text(
-                    f"{con.ERROR} Could not send backup file: {str(e)}\n"
+                    f"{con.ERROR} Could not send backup file: {html.escape(str(e))}\n"
                     f"The backup was created at: {filepath}"
                 )
                 return
@@ -162,7 +163,7 @@ class Backup(TGBFPlugin):
 
         except Exception as e:
             self.log.bind(**error_context(e), handler='backup_callback').error('Backup callback failed')
-            await status_message.edit_text(f"{con.ERROR} Backup failed: {str(e)}")
+            await status_message.edit_text(f"{con.ERROR} Backup failed: {html.escape(str(e))}")
             # Final cleanup attempt
             if filepath.exists():
                 filepath.unlink()

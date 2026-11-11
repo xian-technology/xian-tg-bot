@@ -8,6 +8,7 @@ import constants as con
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import parse_amount, split_amount, submission_accepted
+from utils import sqlite_utc
 
 
 class Rain(TGBFPlugin):
@@ -122,7 +123,7 @@ class Rain(TGBFPlugin):
 
         # Get all users that messaged until 'last_time'
         sql = await self.get_resource("select_active.sql", plugin="active")
-        rain = await self.exec_sql(sql, chat_id, last_time, plugin="active")
+        rain = await self.exec_sql(sql, chat_id, sqlite_utc(last_time), plugin="active")
 
         if not rain["success"] or not rain["data"]:
             msg = f"{con.ERROR} Could not determine last active users"
@@ -139,10 +140,15 @@ class Rain(TGBFPlugin):
             await message.edit_text(msg)
             return
 
+        user_limit = self.cfg.get("user_limit")
+        if len(user_data) > user_limit:
+            self.log.warning(f"User limit of {user_limit} hit")
+            user_data = user_data[:user_limit]
+
         msg = f"{con.RAIN} Initiating rain clouds..."
         message = await message.edit_text(msg)
 
-        # Amount to airdrop to one user
+        # Amount to airdrop to one user; only paid recipients share the total
         amount_single = split_amount(amount_total, len(user_data))
 
         if amount_single <= 0:
@@ -156,16 +162,7 @@ class Rain(TGBFPlugin):
         # List of addresses that will get the airdrop
         addresses = list()
 
-        user_limit = self.cfg.get("user_limit")
-        counter = 0
-
         for user in user_data:
-            counter += 1
-
-            if counter > user_limit:
-                self.log.warning(f"User limit of {user_limit} hit")
-                break
-
             to_user_id = user[0]
             to_username = user[1]
 
@@ -194,10 +191,9 @@ class Rain(TGBFPlugin):
             approved_amount = await xian.get_approved_amount(multisend_contract, token=contract)
             self.log.debug("Token allowance checked")
         except Exception as e:
-            msg = f"GET APPROVED AMOUNT Error: {e}"
             self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         if approved_amount < amount_total:
@@ -210,10 +206,9 @@ class Rain(TGBFPlugin):
                     await message.edit_text(f"{con.ERROR} Can not approve contract!")
                     return
             except Exception as e:
-                msg = f"APPROVE Error: {e}"
                 self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
                 await self.notify(e)
-                await message.edit_text(f"{con.ERROR} {e}")
+                await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
                 return
 
             tx_hash = approve.tx_hash
@@ -222,13 +217,13 @@ class Rain(TGBFPlugin):
                 try:
                     success, result = await self.confirm_tx(xian, approve)
                     if not success:
-                        await message.edit_text(f"{con.STOP} Approval failed: {result}")
+                        await message.edit_text(f"{con.STOP} Approval failed: {html.escape(str(result))}")
                         return
                 except TimeoutError:
                     await message.edit_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await message.edit_text(f"{con.STOP} {approve.message}")
+                await message.edit_text(f"{con.STOP} {html.escape(str(approve.message))}")
                 return
 
         try:
@@ -236,10 +231,9 @@ class Rain(TGBFPlugin):
             send = await xian.send_tx(multisend_contract, multisend_function, kwargs)
             self.log.bind(**transaction_context(send)).debug("Transaction response received")
         except Exception as e:
-            msg = f"SEND Error: {e}"
             self.log.bind(**error_context(e), handler='rain_callback').error('Rain callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         tx_hash = send.tx_hash
@@ -252,8 +246,8 @@ class Rain(TGBFPlugin):
                     link = f'<a href="{explorer_url}/tx/{tx_hash}">View Transaction</a>'
                     await message.edit_text(f"{msg}\n\n{link}", disable_web_page_preview=True)
                 else:
-                    await message.edit_text(f"{con.STOP} {result}")
+                    await message.edit_text(f"{con.STOP} {html.escape(str(result))}")
             except TimeoutError:
                 await message.edit_text(f"{con.ERROR} Rain transaction timeout")
         else:
-            await message.edit_text(f"{con.STOP} {send.message}")
+            await message.edit_text(f"{con.STOP} {html.escape(str(send.message))}")

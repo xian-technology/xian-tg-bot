@@ -1,3 +1,5 @@
+import html
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
@@ -48,8 +50,8 @@ class Tokens(TGBFPlugin):
 
                 for token in tokens:
                     msg += (f'<code>'
-                            f'Ticker  : {token[2].upper()}\n'
-                            f'Contract: {token[1]}\n'
+                            f'Ticker  : {html.escape(token[2].upper())}\n'
+                            f'Contract: {html.escape(token[1])}\n'
                             f'Decimals: {token[3]}\n\n'
                             f'</code>')
                 if msg:
@@ -89,7 +91,6 @@ class Tokens(TGBFPlugin):
                             'token_symbol'
                         )
                     except Exception as e:
-                        txt = f"{con.ERROR} Could not read token details for {entry['name']}: {e}"
                         self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
                         await self.notify(e)
                         return
@@ -137,7 +138,6 @@ class Tokens(TGBFPlugin):
                             'token_symbol'
                         )
                     except Exception as e:
-                        txt = f"{con.ERROR} Could not read token details for {token}: {e}"
                         self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
                         await self.notify(e)
                         return
@@ -151,7 +151,6 @@ class Tokens(TGBFPlugin):
                             decimals
                         )
                     except Exception as e:
-                        txt = f"{con.ERROR} Could not add token {token}: {e}"
                         self.log.bind(**error_context(e), handler='tokens_callback').error('Tokens callback failed')
                         await self.notify(e)
 

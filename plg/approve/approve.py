@@ -1,3 +1,5 @@
+import html
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
@@ -46,10 +48,9 @@ class Approve(TGBFPlugin):
             # Approve contract
             approve = await xian.approve(contract, token=token, amount=amount)
         except Exception as e:
-            msg = f"APPROVE Error: {e}"
             self.log.bind(**error_context(e), handler='approve_callback').error('Approve callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         tx_hash = approve.tx_hash
@@ -65,8 +66,8 @@ class Approve(TGBFPlugin):
                         disable_web_page_preview=True
                     )
                 else:
-                    await message.edit_text(f"{con.STOP} {result}")
+                    await message.edit_text(f"{con.STOP} {html.escape(str(result))}")
 
             await self.confirm_tx(xian, approve, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {approve.message}")
+            await message.edit_text(f"{con.STOP} {html.escape(str(approve.message))}")

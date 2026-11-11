@@ -1,3 +1,4 @@
+import html
 import os
 import re
 
@@ -25,8 +26,6 @@ class Lottery(TGBFPlugin):
             block=False)
         )
 
-    @TGBFPlugin.logging()
-    @TGBFPlugin.send_typing()
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     async def lottery_callback(self, update: Update, context: CallbackContext):
@@ -101,7 +100,7 @@ class Lottery(TGBFPlugin):
                 amount = int(amount)
         except Exception as e:
             await update.message.reply_text(
-                f"{con.ERROR} {e}"
+                f"{con.ERROR} {html.escape(str(e))}"
             )
             return
 
@@ -111,7 +110,7 @@ class Lottery(TGBFPlugin):
         except Exception as e:
             self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')
             await self.notify(e)
-            await update.message.reply_text(f"{con.ERROR} {e}")
+            await update.message.reply_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         if approved_amount < amount:
@@ -121,7 +120,7 @@ class Lottery(TGBFPlugin):
             except Exception as e:
                 self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')
                 await self.notify(e)
-                await update.message.reply_text(f"{con.ERROR} {e}")
+                await update.message.reply_text(f"{con.ERROR} {html.escape(str(e))}")
                 return
 
             tx_hash = approve.tx_hash
@@ -130,13 +129,13 @@ class Lottery(TGBFPlugin):
                 try:
                     success, result = await self.confirm_tx(xian, approve)
                     if not success:
-                        await update.message.reply_text(f"{con.ERROR} Approval failed: {result}")
+                        await update.message.reply_text(f"{con.ERROR} Approval failed: {html.escape(str(result))}")
                         return
                 except TimeoutError:
                     await update.message.reply_text(f"{con.ERROR} Approval transaction timeout")
                     return
             else:
-                await update.message.reply_text(f"{con.ERROR} {approve.message}")
+                await update.message.reply_text(f"{con.ERROR} {html.escape(str(approve.message))}")
                 return
 
         kwargs = {
@@ -152,7 +151,7 @@ class Lottery(TGBFPlugin):
         except Exception as e:
             self.log.bind(**error_context(e), handler='lottery_callback').error('Lottery callback failed')
             await self.notify(e)
-            await update.message.reply_text(f"{con.ERROR} {e}")
+            await update.message.reply_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         tx_hash = send.tx_hash
@@ -164,6 +163,7 @@ class Lottery(TGBFPlugin):
 
                 from_user = update.message.from_user
                 creator = "@" + from_user.username if from_user.username else from_user.first_name
+                creator = html.escape(creator)
                 creator = creator if creator.startswith('@') else f'<code>{creator}</code>'
 
                 ticker = await xian.get_state(
@@ -172,7 +172,7 @@ class Lottery(TGBFPlugin):
                     'token_symbol'
                 )
 
-                token = ticker if ticker else token_contract
+                token = html.escape(str(ticker if ticker else token_contract))
 
                 msg = (f'{con.LUCK} <b>New Lottery started!</b>\n\n'
                        f'<code>LotteryID:</code> <code>{lottery_id}</code>\n'
@@ -193,13 +193,13 @@ class Lottery(TGBFPlugin):
                     reply_markup=self.lottery_buttons(lottery_id)
                 )
             else:
-                await update.message.reply_text(f"{con.ERROR} {result}")
+                await update.message.reply_text(f"{con.ERROR} {html.escape(str(result))}")
                 return
 
         if submission_accepted(send):
             await self.confirm_tx(xian, send, tx_result)
         else:
-            await update.message.reply_text(f"{con.ERROR} {send.message}")
+            await update.message.reply_text(f"{con.ERROR} {html.escape(str(send.message))}")
             return
 
     def lottery_buttons(self, lottery_id: int):
@@ -261,7 +261,7 @@ class Lottery(TGBFPlugin):
                 async def tx_result(success: str, result: str):
                     if success:
                         reply_msg = await update.callback_query.message.reply_text(
-                            f'{con.HEART_GREEN} User {username} participates in the lottery. {link}',
+                            f'{con.HEART_GREEN} User {html.escape(username)} participates in the lottery. {link}',
                             disable_web_page_preview=True
                         )
                         await self.remove_msg_after(reply_msg, after_secs=10)
@@ -276,8 +276,8 @@ class Lottery(TGBFPlugin):
                         )
                     else:
                         error_msg = await update.callback_query.message.reply_text(
-                            f'{con.ERROR} Could not add {username} to the lottery: '
-                            f'<code>{result}</code>.',
+                            f'{con.ERROR} Could not add {html.escape(username)} to the lottery: '
+                            f'<code>{html.escape(str(result))}</code>.',
                             disable_web_page_preview=True
                         )
                         await self.remove_msg_after(error_msg, after_secs=10)
@@ -292,8 +292,8 @@ class Lottery(TGBFPlugin):
                     await self.confirm_tx(xian, send, tx_result)
                 else:
                     error_msg = await update.callback_query.message.reply_text(
-                        f'{con.ERROR} Could not add {username} to the lottery: '
-                        f'<code>{send.message}</code>.',
+                        f'{con.ERROR} Could not add {html.escape(username)} to the lottery: '
+                        f'<code>{html.escape(str(send.message))}</code>.',
                         disable_web_page_preview=True
                     )
                     await self.remove_msg_after(error_msg, after_secs=10)
@@ -311,7 +311,7 @@ class Lottery(TGBFPlugin):
                 )
 
         # END lottery
-        if lottery_command == 'end':
+        elif lottery_command == 'end':
             try:
                 send = await xian.send_tx(
                     lottery_contract,
@@ -331,9 +331,9 @@ class Lottery(TGBFPlugin):
                         winner_username = await self.kv_get(winner_address)
 
                         if winner_username:
-                            winner = winner_username
+                            winner = html.escape(winner_username)
                         else:
-                            winner = '<code>' + winner_address[:6] + '...' + '</code>'
+                            winner = '<code>' + html.escape(winner_address[:6]) + '...' + '</code>'
 
                         await update.callback_query.message.reply_text(
                             f'{con.HEART} Lottery ended and {winner} won! {link}',
@@ -347,7 +347,7 @@ class Lottery(TGBFPlugin):
                     else:
                         error_msg = await update.callback_query.message.reply_text(
                             f'{con.ERROR} Could not end the lottery: '
-                            f'<code>{result}</code>.',
+                            f'<code>{html.escape(str(result))}</code>.',
                             disable_web_page_preview=True
                         )
                         await self.remove_msg_after(error_msg, after_secs=10)
@@ -363,7 +363,7 @@ class Lottery(TGBFPlugin):
                 else:
                     error_msg = await update.callback_query.message.reply_text(
                         f'{con.ERROR} Could not end the lottery: '
-                        f'<code>{send.message}</code>.',
+                        f'<code>{html.escape(str(send.message))}</code>.',
                         disable_web_page_preview=True
                     )
                     await self.remove_msg_after(error_msg, after_secs=10)

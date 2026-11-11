@@ -1,3 +1,4 @@
+import html
 import io
 from pathlib import Path
 
@@ -66,10 +67,9 @@ class Submit(TGBFPlugin):
             deploy = await xian.submit_contract(name, code)
             self.log.bind(**transaction_context(deploy)).debug("Transaction response received")
         except Exception as e:
-            msg = f"DEPLOY_CONTRACT Error: {e}"
             self.log.bind(**error_context(e), handler='submit_callback').error('Submit callback failed')
             await self.notify(e)
-            await message.edit_text(f"{con.ERROR} {e}")
+            await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
         tx_hash = deploy.tx_hash
@@ -85,8 +85,8 @@ class Submit(TGBFPlugin):
                         disable_web_page_preview=True
                     )
                 else:
-                    await message.edit_text(f"{con.STOP} {result}")
+                    await message.edit_text(f"{con.STOP} {html.escape(str(result))}")
 
             await self.confirm_tx(xian, deploy, tx_result)
         else:
-            await message.edit_text(f"{con.STOP} {deploy.message}")
+            await message.edit_text(f"{con.STOP} {html.escape(str(deploy.message))}")

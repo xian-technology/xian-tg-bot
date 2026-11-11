@@ -39,15 +39,17 @@ class All(TGBFPlugin):
             )
             return
 
-        def confirm_button():
-            menu = utl.build_menu([InlineKeyboardButton("Send to all users", callback_data=self.name)])
-            return InlineKeyboardMarkup(menu)
-
         await update.message.reply_text(
             update.message.text_html[len(self.name) + 2:],
-            reply_markup=confirm_button()
+            reply_markup=self.confirm_button()
         )
 
+    def confirm_button(self) -> InlineKeyboardMarkup:
+        # Must match the CallbackQueryHandler pattern registered in init()
+        menu = utl.build_menu([InlineKeyboardButton("Send to all users", callback_data=f"{self.name}_send")])
+        return InlineKeyboardMarkup(menu)
+
+    @TGBFPlugin.owner(hidden=True)
     async def send_callback(self, update: Update, context: CallbackContext):
         if not update.callback_query.data.startswith(self.name):
             return
