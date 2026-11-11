@@ -56,7 +56,7 @@ filterwarnings = [
 
 [tool.mypy]
 python_version = "3.14"
-files = ["config.py", "constants.py", "credentials.py", "transactions.py", "wallet_crypto.py", "tests"]
+files = ["config.py", "constants.py", "credentials.py", "dex_quote.py", "transactions.py", "wallet_crypto.py", "tests"]
 follow_imports = "skip"
 exclude = "^(plg/|web\\.py|plugin\\.py|main\\.py)$"
 ignore_missing_imports = true

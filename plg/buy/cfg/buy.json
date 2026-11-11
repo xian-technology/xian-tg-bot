@@ -1,5 +1,8 @@
 {
     "category": "Xian",
     "description": "Buy tokens on the DEX",
-    "contract": "con_dex_helper"
+    "contract": "con_dex_helper",
+    "dex_contract": "con_dex",
+    "pairs_contract": "con_pairs",
+    "slippage_percent": 5
 }

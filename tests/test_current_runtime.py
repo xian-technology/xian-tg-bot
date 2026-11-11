@@ -322,7 +322,13 @@ async def test_trade_callback_submits_deadline_and_formats_typed_receipt(side: s
     plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
     plugin.get_wallet = AsyncMock()
     typed_result = decode_wire_numbers([{"__fixed__": "2.500000000000000000000000000001"}, 3])
+    async def quote(contract: str, function: str, kwargs: dict) -> Any:
+        return {"getAmountsOut": [2, 3], "getReserves": [10, 10, None],
+                "getTradeFeeBps": 30, "getAmountIn": 3}[function]
+
     client = SimpleNamespace(
+        call=AsyncMock(side_effect=quote),
+        get_state=AsyncMock(return_value=1),
         send_tx=AsyncMock(return_value=submission()),
         get_approved_amount=AsyncMock(return_value=100),
         wait_for_tx=AsyncMock(return_value=replace(receipt(), execution={"status": 0, "result": typed_result})),

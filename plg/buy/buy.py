@@ -5,6 +5,7 @@ from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
 import constants as con
 import utils as utl
+from dex_quote import buy_max_input
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import (
@@ -192,6 +193,17 @@ class Buy(TGBFPlugin):
         message = update.effective_message
 
         try:
+            # The helper reverts if the trade needs more than this, so a
+            # price move after signing cannot cost more than the tolerance
+            max_input = await buy_max_input(
+                xian,
+                dex=self.cfg.get('dex_contract'),
+                pairs=self.cfg.get('pairs_contract'),
+                buy_token=buy_contract,
+                sell_token=sell_contract,
+                amount=amount,
+                slippage=parse_amount(self.cfg.get('slippage_percent')),
+            )
             approved_amount = await xian.get_approved_amount(contract, token=sell_contract)
             self.log.debug("Token allowance checked")
         except Exception as e:
@@ -200,9 +212,10 @@ class Buy(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} {html.escape(str(e))}")
             return
 
-        if approved_amount < amount:
+        if approved_amount < max_input:
             try:
-                approve = await xian.approve(contract, token=sell_contract)
+                # Approve exactly the most this trade may spend
+                approve = await xian.approve(contract, token=sell_contract, amount=max_input)
                 self.log.bind(**transaction_context(approve)).debug("Transaction response received")
             except Exception as e:
                 self.log.bind(**error_context(e), handler='confirm_buy_callback').error('Confirm buy callback failed')
@@ -233,7 +246,7 @@ class Buy(TGBFPlugin):
                     "buy_token": buy_contract,
                     "sell_token": sell_contract,
                     "amount": amount,
-                    "slippage": 5,
+                    "max_input": max_input,
                     "deadline": trade_deadline(),
                 }
             )

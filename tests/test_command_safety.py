@@ -326,8 +326,7 @@ async def test_trade_confirmation_executes_once(side: str, tmp_path: Path, monke
         await asyncio.sleep(0.05)
         return receipt(result=[1, 2])
 
-    client = SimpleNamespace(
-        send_tx=AsyncMock(return_value=submission()),
+    client = quoting_client(
         get_approved_amount=AsyncMock(return_value=100),
         wait_for_tx=AsyncMock(side_effect=slow_receipt),
     )
@@ -411,33 +410,6 @@ async def test_lottery_approves_exactly_the_deposit(deposit: str, approved: str)
     client.approve.assert_awaited_once_with("con_lottery", token="currency", amount=parse_amount(approved))
 
 
-async def test_sell_approves_exactly_the_sold_amount_of_the_sold_token() -> None:
-    import json
-
-    from plg.sell.sell import Sell
-    from transactions import parse_amount
-
-    plugin = plugin_instance(Sell, "sell")
-    plugin._cfg = json.loads((ROOT / "plg" / "sell" / "cfg" / "sell.json").read_text())
-    plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
-    plugin.get_wallet = AsyncMock()
-    client = SimpleNamespace(
-        get_approved_amount=AsyncMock(return_value=parse_amount("2.4")),
-        approve=AsyncMock(return_value=submission()),
-        send_tx=AsyncMock(return_value=submission()),
-        wait_for_tx=AsyncMock(return_value=receipt(result=[2.5, 1])),
-    )
-    plugin.get_xian = AsyncMock(return_value=client)
-    update = SimpleNamespace(effective_message=SimpleNamespace(edit_text=AsyncMock()),
-                             effective_user=SimpleNamespace(id=7),
-                             callback_query=SimpleNamespace(data="sell_1", id="1"))
-
-    await plugin.confirm_sell_callback(update, SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock())))
-
-    client.get_approved_amount.assert_awaited_once_with("con_dex_helper", token="con_a")
-    client.approve.assert_awaited_once_with("con_dex_helper", token="con_a", amount=parse_amount("2.5"))
-
-
 # --- result reporting -------------------------------------------------------
 
 @pytest.mark.parametrize("side", ["buy", "sell"])
@@ -451,9 +423,8 @@ async def test_failed_trade_popup_does_not_claim_success(side: str) -> None:
     plugin._cfg = json.loads((ROOT / "plg" / side / "cfg" / f"{side}.json").read_text())
     plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
     plugin.get_wallet = AsyncMock()
-    client = SimpleNamespace(
+    client = quoting_client(
         get_approved_amount=AsyncMock(return_value=1000),
-        send_tx=AsyncMock(return_value=submission()),
         wait_for_tx=AsyncMock(return_value=receipt(success=False, result="Trade deadline has expired")),
     )
     plugin.get_xian = AsyncMock(return_value=client)
@@ -515,3 +486,150 @@ def test_submit_caption_accepts_key_value_pairs() -> None:
 
     assert parse_caption(None) == {}
     assert parse_caption("name=con_token, owner=abc") == {"name": "con_token", "owner": "abc"}
+
+
+# --- DEX helper price bounds -------------------------------------------------
+
+def quoting_client(**overrides: Any) -> SimpleNamespace:
+    """A client whose DEX reads quote 2 B for 2.5 A out and 5 B out for any sell."""
+    from transactions import parse_amount
+
+    answers = {
+        "getAmountsOut": lambda kwargs: [kwargs["amountIn"], parse_amount("5")],
+        "getReserves": lambda kwargs: [parse_amount("100"), parse_amount("200"), None],
+        "getTradeFeeBps": lambda kwargs: 30,
+        "getAmountIn": lambda kwargs: parse_amount("2"),
+    }
+
+    async def call(contract: str, function: str, kwargs: dict) -> Any:
+        return answers[function](kwargs)
+
+    async def get_state(contract: str, variable: str, *keys: Any) -> Any:
+        return {"toks_to_pair": 1, "pairs": "con_a"}[variable]
+
+    client = SimpleNamespace(
+        call=AsyncMock(side_effect=call),
+        get_state=AsyncMock(side_effect=get_state),
+        get_approved_amount=AsyncMock(return_value=0),
+        approve=AsyncMock(return_value=submission()),
+        send_tx=AsyncMock(return_value=submission()),
+        wait_for_tx=AsyncMock(return_value=receipt(result=[2, 2.5])),
+    )
+    for key, value in overrides.items():
+        setattr(client, key, value)
+    return client
+
+
+async def press_trade(side: str, client: SimpleNamespace) -> SimpleNamespace:
+    import json
+
+    from plg.buy.buy import Buy
+    from plg.sell.sell import Sell
+
+    plugin = plugin_instance(Buy if side == "buy" else Sell, side)
+    plugin._cfg = json.loads((ROOT / "plg" / side / "cfg" / f"{side}.json").read_text())
+    # buy rows: buy A (con_a) with B (con_b); sell rows: sell A (con_a) for B (con_b)
+    plugin.exec_sql = AsyncMock(return_value={"success": True, "data": [(1, 7, "con_a", "A", "con_b", "B", b"2.5")]})
+    plugin.get_wallet = AsyncMock()
+    plugin.get_xian = AsyncMock(return_value=client)
+    message = SimpleNamespace(edit_text=AsyncMock())
+    update = SimpleNamespace(effective_message=message, effective_user=SimpleNamespace(id=7),
+                             callback_query=SimpleNamespace(data=f"{side}_1", id="1"))
+    await getattr(plugin, f"confirm_{side}_callback")(
+        update, SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock())),
+    )
+    return message
+
+
+async def test_buy_bounds_input_by_fresh_quote_and_approves_exactly_that() -> None:
+    from transactions import parse_amount
+
+    client = quoting_client()
+    await press_trade("buy", client)
+
+    # Reserves: token0 is the bought con_a (100), so the sold con_b reserve (200) is the input side
+    client.call.assert_any_await(
+        "con_dex", "getAmountIn",
+        {"amountOut": parse_amount("2.5"), "reserveIn": parse_amount("200"),
+         "reserveOut": parse_amount("100"), "feeBps": 30},
+    )
+    max_input = parse_amount("2.1")  # quoted 2 plus the configured 5% tolerance
+    client.approve.assert_awaited_once_with("con_dex_helper", token="con_b", amount=max_input)
+    contract, function, kwargs = client.send_tx.await_args.args[:2] + (client.send_tx.await_args.kwargs["kwargs"],)
+    assert (contract, function) == ("con_dex_helper", "buy")
+    assert kwargs["max_input"] == max_input and kwargs["amount"] == parse_amount("2.5")
+    assert "slippage" not in kwargs
+
+
+async def test_sell_bounds_output_by_fresh_quote() -> None:
+    from transactions import parse_amount
+
+    client = quoting_client()
+    await press_trade("sell", client)
+
+    client.call.assert_any_await("con_dex", "getAmountsOut",
+                                 {"amountIn": parse_amount("2.5"), "src": "con_a", "path": [1]})
+    kwargs = client.send_tx.await_args.kwargs["kwargs"]
+    assert kwargs["min_out"] == parse_amount("4.75")  # quoted 5 less the configured 5% tolerance
+    assert "slippage" not in kwargs
+    client.approve.assert_awaited_once_with("con_dex_helper", token="con_a", amount=parse_amount("2.5"))
+
+
+@pytest.mark.parametrize("side", ["buy", "sell"])
+async def test_trade_without_a_positive_quote_is_not_submitted(side: str) -> None:
+    from transactions import parse_amount
+
+    async def no_pair(contract: str, variable: str, *keys: Any) -> Any:
+        return None
+
+    client = quoting_client(get_state=AsyncMock(side_effect=no_pair))
+    message = await press_trade(side, client)
+    client.send_tx.assert_not_awaited()
+    client.approve.assert_not_awaited()
+    assert "Pair does not exist" in message.edit_text.await_args.args[0]
+
+    async def dust(contract: str, function: str, kwargs: dict) -> Any:
+        return [kwargs["amountIn"], parse_amount("0")]
+
+    client = quoting_client(call=AsyncMock(side_effect=dust))
+    if side == "sell":
+        message = await press_trade(side, client)
+        client.send_tx.assert_not_awaited()
+        assert "quote" in message.edit_text.await_args.args[0]
+
+
+async def test_price_bounds_keep_full_contract_precision() -> None:
+    from decimal import Decimal, localcontext
+
+    from dex_quote import sell_min_out
+
+    quote = Decimal("123456789012345678.123456789012345678901234567891")
+
+    async def call(contract: str, function: str, kwargs: dict) -> Any:
+        return [kwargs["amountIn"], quote]
+
+    client = quoting_client(call=AsyncMock(side_effect=call))
+    min_out = await sell_min_out(client, dex="con_dex", pairs="con_pairs", sell_token="con_a",
+                                 buy_token="con_b", amount=Decimal(1), slippage=Decimal(5))
+    with localcontext(prec=100):
+        exact = quote * Decimal("0.95")
+    assert min_out <= exact and exact - min_out < Decimal("1e-30")
+
+
+async def test_pair_lookup_uses_the_sorted_token_key() -> None:
+    from dex_quote import pair_id
+
+    client = quoting_client()
+    assert await pair_id(client, "con_pairs", "con_b", "con_a") == 1
+    client.get_state.assert_awaited_once_with("con_pairs", "toks_to_pair", "con_a", "con_b")
+
+
+@pytest.mark.parametrize(("allowance", "approves"), [("2.2", False), ("2.0", True)])
+async def test_buy_approves_only_when_allowance_is_below_the_bound(allowance: str, approves: bool) -> None:
+    from transactions import parse_amount
+
+    # The bound is 2.1 of the sold token; the bought amount (2.5) is a different unit
+    client = quoting_client(get_approved_amount=AsyncMock(return_value=parse_amount(allowance)))
+    await press_trade("buy", client)
+    assert client.approve.await_count == int(approves)
+    client.send_tx.assert_awaited_once()

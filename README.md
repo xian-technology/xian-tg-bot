@@ -148,6 +148,12 @@ Each plugin may provide `cfg/<plugin>.json` with keys such as `handle`,
 `requires`, `description`, `category`, `aliases`, `blacklist`, and
 `whitelist`.
 
+`/buy` and `/sell` trade through `con_dex_helper` (`contract`). At
+confirmation they quote the trade on `dex_contract`/`pairs_contract` and sign
+a price bound widened by `slippage_percent`: a buy approves and signs
+`max_input` of the sold token, a sell signs `min_out`. The helper reverts if
+the price has moved past the bound.
+
 ## Plugin Development
 
 - Place handlers in `plg/<feature>/<feature>.py` with a class that inherits

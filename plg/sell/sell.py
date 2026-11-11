@@ -5,6 +5,7 @@ from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 
 import constants as con
 import utils as utl
+from dex_quote import sell_min_out
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
 from transactions import (
@@ -191,6 +192,16 @@ class Sell(TGBFPlugin):
         message = update.effective_message
 
         try:
+            # The helper reverts if the sale yields less than this
+            min_out = await sell_min_out(
+                xian,
+                dex=self.cfg.get('dex_contract'),
+                pairs=self.cfg.get('pairs_contract'),
+                sell_token=sell_contract,
+                buy_token=buy_contract,
+                amount=amount,
+                slippage=parse_amount(self.cfg.get('slippage_percent')),
+            )
             approved_amount = await xian.get_approved_amount(contract, token=sell_contract)
             self.log.debug("Token allowance checked")
         except Exception as e:
@@ -233,7 +244,7 @@ class Sell(TGBFPlugin):
                     "sell_token": sell_contract,
                     "buy_token": buy_contract,
                     "amount": amount,
-                    "slippage": 5,
+                    "min_out": min_out,
                     "deadline": trade_deadline(),
                 }
             )
