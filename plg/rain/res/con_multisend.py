@@ -1,7 +1,7 @@
 I = importlib
 
 @export
-def send(addresses: list, amount: float, contract: str):
+def send(addresses: list, amount: decimal, contract: str):
     token = I.import_module(contract)
 
     for address in addresses:

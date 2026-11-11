@@ -4,7 +4,7 @@ from telegram.ext import CallbackContext, CommandHandler
 import constants as con
 from logging_setup import error_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import parse_amount, submission_accepted
 
 
 class Approve(TGBFPlugin):
@@ -31,7 +31,7 @@ class Approve(TGBFPlugin):
 
         try:
             # Validate amount
-            amount = float(amount)
+            amount = parse_amount(amount)
         except:
             msg = f"{con.ERROR} Amount is not valid"
             await update.message.reply_text(msg)

@@ -4,7 +4,7 @@ data = Hash(default_value='')
 
 
 @export
-def lottery_start(lottery_id: int, token_contract: str, total_amount: float):
+def lottery_start(lottery_id: int, token_contract: str, total_amount: decimal):
     assert data[lottery_id] == '', 'Lottery with this ID already exists!'
 
     importlib.import_module(token_contract).transfer_from(

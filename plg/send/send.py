@@ -5,7 +5,7 @@ from xian_py.transaction import simulate_tx_async
 import constants as con
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import parse_amount, submission_accepted
 
 
 class Send(TGBFPlugin):
@@ -77,7 +77,7 @@ class Send(TGBFPlugin):
 
         try:
             # Check if amount is valid
-            amount = float(amount)
+            amount = parse_amount(amount)
 
             if amount <= 0:
                 raise ValueError('Amount can not be negative')
@@ -85,9 +85,6 @@ class Send(TGBFPlugin):
             msg = f"{con.ERROR} Amount not valid"
             await message.edit_text(msg)
             return
-
-        if amount.is_integer():
-            amount = int(amount)
 
         # Check if recipient is a contract
         if to.startswith('con_'):
@@ -108,7 +105,7 @@ class Send(TGBFPlugin):
             }
 
             # Check if recipient is an XNS name
-            sim = await simulate_tx_async(self.cfg_global.get('xian', 'node'), payload)
+            sim = await simulate_tx_async(self.cfg_global.get('xian', 'node'), payload, vm_profile="xian_vm_v2")
 
             if sim['result'] == 'None':
                 msg = f"{con.ERROR} Not a valid address, contract or XNS name!"

@@ -6,7 +6,7 @@ from telegram.ext import CallbackContext, CommandHandler
 import constants as con
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import parse_amount, submission_accepted
 
 
 class Tip(TGBFPlugin):
@@ -81,7 +81,7 @@ class Tip(TGBFPlugin):
 
         try:
             # Check if amount is valid
-            amount = float(amount)
+            amount = parse_amount(amount)
 
             if amount <= 0:
                 raise ValueError('Amount can not be negative')
@@ -89,9 +89,6 @@ class Tip(TGBFPlugin):
             msg = f"{con.ERROR} Amount not valid"
             await message.edit_text(msg)
             return
-
-        if amount.is_integer():
-            amount = int(amount)
 
         from_wallet = await self.get_wallet(from_user_id)
         xian = await self.get_xian(wallet=from_wallet)

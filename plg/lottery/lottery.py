@@ -8,7 +8,7 @@ import constants as con
 import utils as utl
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import parse_amount, submission_accepted
 
 
 class Lottery(TGBFPlugin):
@@ -92,7 +92,7 @@ class Lottery(TGBFPlugin):
 
         # Validate amount
         try:
-            amount = float(amount)
+            amount = parse_amount(amount)
 
             if amount <= 0:
                 raise ValueError('Amount can not be negative')

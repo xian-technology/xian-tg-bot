@@ -1,10 +1,34 @@
 """Transaction acceptance and finality for bot commands using the current SDK."""
 
+from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 from xian_py import XianAsync
 from xian_py.exception import XianException
 from xian_py.models import TransactionSubmission
+from xian_runtime_types.decimal import canonical_fixed
+
+
+def parse_amount(text: str | int) -> Decimal:
+    return Decimal(canonical_fixed(text))
+
+
+def encode_trade_amount(amount: Decimal) -> bytes:
+    """Bind decimal text as bytes to preserve it in existing SQLite REAL columns."""
+    return canonical_fixed(amount).encode("ascii")
+
+
+def decode_trade_amount(stored: bytes | str | float | int) -> Decimal:
+    text = stored.decode("ascii") if isinstance(stored, bytes) else str(stored)
+    return parse_amount(text)
+
+
+def split_amount(total: Decimal, recipients: int) -> Decimal:
+    # Round down to the bot's four-place payout precision without overspending.
+    units = Fraction(total) * 10_000 // recipients
+    whole, fraction = divmod(units, 10_000)
+    return Decimal(f"{whole}.{fraction:04d}")
 
 
 def submission_accepted(submission: TransactionSubmission) -> bool:

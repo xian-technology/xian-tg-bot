@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import websockets
-from xian_py import XianAsync
+from xian_py import XianAsync, XianClientConfig
 from xian_py.wallet import Wallet
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -117,7 +117,7 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
     try:
         await wait_for_event_ready(event_task, event_ready, args.timeout_seconds)
 
-        async with XianAsync(args.rpc_url, args.chain_id, sender) as client:
+        async with XianAsync(args.rpc_url, args.chain_id, sender, config=XianClientConfig(vm_profile="xian_vm_v2")) as client:
             await client.ensure_chain_id()
             chain_id = client.chain_id
             sender_before = normalize_balance(await client.get_balance(sender.public_key))

@@ -19,7 +19,7 @@ from pickledb import PickleDB
 from telegram import Chat, Message, Update
 from telegram.constants import ChatAction
 from telegram.ext import BaseHandler, CallbackContext, CallbackQueryHandler, Job
-from xian_py import XianAsync
+from xian_py import XianAsync, XianClientConfig
 from xian_py.models import TransactionSubmission
 from xian_py.wallet import Wallet
 
@@ -935,7 +935,7 @@ class TGBFPlugin:
         if chain_id is None and node == global_node:
             chain_id = self.cfg_global.get('xian', 'chain_id')
 
-        xian = XianAsync(node, chain_id, wallet, session=await self.tgb.get_xian_session())
+        xian = XianAsync(node, chain_id, wallet, session=await self.tgb.get_xian_session(), config=XianClientConfig(vm_profile="xian_vm_v2"))
 
         if chain_id is None:
             await xian.ensure_chain_id()

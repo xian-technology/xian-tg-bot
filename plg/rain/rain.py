@@ -7,7 +7,7 @@ from telegram.ext import CallbackContext, CommandHandler
 import constants as con
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import parse_amount, split_amount, submission_accepted
 
 
 class Rain(TGBFPlugin):
@@ -79,7 +79,7 @@ class Rain(TGBFPlugin):
 
         try:
             # Check if amount is valid
-            amount_total = float(amount_total)
+            amount_total = parse_amount(amount_total)
 
             if amount_total <= 0:
                 raise ValueError('Amount can not be negative')
@@ -87,9 +87,6 @@ class Rain(TGBFPlugin):
             msg = f"{con.ERROR} Amount not valid!"
             await message.edit_text(msg)
             return
-
-        if amount_total.is_integer():
-            amount_total = int(amount_total)
 
         # Check if time unit is included and valid
         if not time_frame.lower().endswith(("m", "h")):
@@ -146,10 +143,11 @@ class Rain(TGBFPlugin):
         message = await message.edit_text(msg)
 
         # Amount to airdrop to one user
-        amount_single = float(f"{(amount_total / len(user_data)):.4f}")
+        amount_single = split_amount(amount_total, len(user_data))
 
-        if amount_single.is_integer():
-            amount_single = int(amount_single)
+        if amount_single <= 0:
+            await message.edit_text(f"{con.ERROR} Amount is too small to split at four decimal places")
+            return
 
         msg = f"Rained <code>{amount_single}</code> {ticker} each on following users:\n"
 

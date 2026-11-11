@@ -6,5 +6,5 @@ CREATE TABLE sell_transactions
   sell_symbol   TEXT,
   buy_contract  TEXT,
   buy_symbol    TEXT,
-  amount        REAL
+  amount        BLOB
 )

@@ -5,7 +5,7 @@ import constants as con
 import utils as utl
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import decode_trade_amount, encode_trade_amount, parse_amount, submission_accepted
 
 
 class Buy(TGBFPlugin):
@@ -50,7 +50,7 @@ class Buy(TGBFPlugin):
 
         try:
             # Check if amount is valid
-            amount = float(amount)
+            amount = parse_amount(amount)
 
             if amount <= 0:
                 raise ValueError('Amount can not be negative')
@@ -58,9 +58,6 @@ class Buy(TGBFPlugin):
             msg = f"{con.ERROR} Amount not valid"
             await message.edit_text(msg)
             return
-
-        if amount.is_integer():
-            amount = int(amount)
 
         # Handle single ticker vs pair format
         if "-" not in pair_or_ticker:
@@ -132,7 +129,7 @@ class Buy(TGBFPlugin):
         # Store transaction data in SQLite
         await self.exec_sql(
             await self.get_resource("insert_buy.sql"),
-            id, user_id, buy_contract, buy_symbol, sell_contract, sell_symbol, amount
+            id, user_id, buy_contract, buy_symbol, sell_contract, sell_symbol, encode_trade_amount(amount)
         )
 
         await message.edit_text(
@@ -169,7 +166,7 @@ class Buy(TGBFPlugin):
         buy_symbol = row[3]
         sell_contract = row[4]
         sell_symbol = row[5]
-        amount = row[6]
+        amount = decode_trade_amount(row[6])
 
         if update.effective_user.id != user_id:
             return
@@ -223,7 +220,7 @@ class Buy(TGBFPlugin):
                     "buy_token": buy_contract,
                     "sell_token": sell_contract,
                     "amount": amount,
-                    "slippage": float(5)
+                    "slippage": 5
                 }
             )
             self.log.bind(**transaction_context(buy)).debug("Transaction response received")
@@ -264,9 +261,6 @@ class Buy(TGBFPlugin):
             await self.confirm_tx(xian, buy, tx_result)
         else:
             await message.edit_text(f"{con.ERROR} {buy.message}")
-
-        if amount.is_integer:
-            amount = int(amount)
 
         await context.bot.answer_callback_query(
             update.callback_query.id,

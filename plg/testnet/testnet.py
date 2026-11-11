@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
@@ -7,7 +8,7 @@ from xian_py.wallet import Wallet
 import constants as con
 from logging_setup import error_context, transaction_context
 from plugin import TGBFPlugin
-from transactions import submission_accepted
+from transactions import parse_amount, submission_accepted
 
 
 class Testnet(TGBFPlugin):
@@ -50,7 +51,7 @@ class Testnet(TGBFPlugin):
                 return
 
             try:
-                amount = float(context.args[1])
+                amount = parse_amount(context.args[1])
                 if amount <= 0:
                     await update.message.reply_text(f"{con.ERROR} Amount must be greater than 0")
                     return
@@ -104,7 +105,7 @@ class Testnet(TGBFPlugin):
             await self.validate_claim(testnet, user_address)
 
             # Amount to send
-            amount = self.cfg.get('amount')
+            amount = parse_amount(str(self.cfg.get('amount')))
 
             try:
                 # Send testnet XIAN from faucet to user
@@ -144,7 +145,7 @@ class Testnet(TGBFPlugin):
             await self.notify(e)
             await message.edit_text(f"{con.ERROR} An unexpected error occurred")
 
-    async def handle_send(self, update: Update, from_wallet: Wallet, amount: float, to_address: str):
+    async def handle_send(self, update: Update, from_wallet: Wallet, amount: Decimal, to_address: str):
         """Handle sending tokens from user's bot wallet to another address"""
         message = await update.message.reply_text(f"{con.WAIT} Sending...")
 

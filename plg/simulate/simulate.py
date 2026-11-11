@@ -1,4 +1,5 @@
-import ast
+import json
+from decimal import Decimal
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
@@ -42,8 +43,7 @@ class Simulate(TGBFPlugin):
             return
 
         try:
-            # Attempt to evaluate the string as a Python literal
-            payload = ast.literal_eval(payload_str)
+            payload = json.loads(payload_str, parse_float=Decimal)
 
             # Check if the result is a dictionary
             if not isinstance(payload, dict):
@@ -55,7 +55,7 @@ class Simulate(TGBFPlugin):
 
         try:
             # Simulate transaction
-            simulate = await simulate_tx_async(node_url, payload)
+            simulate = await simulate_tx_async(node_url, payload, vm_profile="xian_vm_v2")
             self.log.bind(**transaction_context(simulate)).debug("Transaction response received")
         except Exception as e:
             msg = f"SIMULATE Error: {e}"

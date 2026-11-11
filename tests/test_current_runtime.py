@@ -288,3 +288,18 @@ async def test_smoke_bounds_connection_wait() -> None:
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+def test_trade_amount_survives_existing_sqlite_real_affinity() -> None:
+    import sqlite3
+
+    from transactions import decode_trade_amount, encode_trade_amount, parse_amount, split_amount
+
+    exact = parse_amount("9007199254740993.12345678901234567890123456789")
+    with sqlite3.connect(":memory:") as conn:
+        conn.execute("CREATE TABLE trades(amount REAL)")
+        conn.execute("INSERT INTO trades VALUES (?)", (encode_trade_amount(exact),))
+        stored = conn.execute("SELECT amount FROM trades").fetchone()[0]
+    assert decode_trade_amount(stored) == exact
+    assert decode_trade_amount(1.25) == parse_amount("1.25")
+    assert split_amount(parse_amount("1"), 6) == parse_amount("0.1666")
