@@ -340,7 +340,7 @@ async def test_trade_confirmation_executes_once(side: str, tmp_path: Path, monke
         )
         return update, SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock()))
 
-    callback = getattr(plugin, f"confirm_{side}_callback")
+    callback = plugin.confirm_callback
     await callback(*press(8))  # another user's press must not execute or consume the order
     client.send_tx.assert_not_awaited()
     await asyncio.gather(*(callback(*press(7)) for _ in range(3)))
@@ -433,7 +433,7 @@ async def test_failed_trade_popup_does_not_claim_success(side: str) -> None:
                              effective_user=SimpleNamespace(id=7),
                              callback_query=SimpleNamespace(data=f"{side}_1", id="1"))
 
-    await getattr(plugin, f"confirm_{side}_callback")(update, context)
+    await plugin.confirm_callback(update, context)
 
     popup = context.bot.answer_callback_query.await_args.args[1]
     assert "Bought" not in popup and "Sold" not in popup
@@ -535,7 +535,7 @@ async def press_trade(side: str, client: SimpleNamespace) -> SimpleNamespace:
     message = SimpleNamespace(edit_text=AsyncMock())
     update = SimpleNamespace(effective_message=message, effective_user=SimpleNamespace(id=7),
                              callback_query=SimpleNamespace(data=f"{side}_1", id="1"))
-    await getattr(plugin, f"confirm_{side}_callback")(
+    await plugin.confirm_callback(
         update, SimpleNamespace(bot=SimpleNamespace(answer_callback_query=AsyncMock())),
     )
     return message

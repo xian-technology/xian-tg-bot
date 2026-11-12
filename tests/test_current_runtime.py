@@ -350,7 +350,7 @@ async def test_trade_callback_submits_deadline_and_formats_typed_receipt(side: s
     update = SimpleNamespace(effective_message=message, effective_user=SimpleNamespace(id=7),
                              callback_query=SimpleNamespace(data=f"{side}_1", id="1"))
 
-    await getattr(plugin, f"confirm_{side}_callback")(update, context)
+    await plugin.confirm_callback(update, context)
 
     call = client.send_tx.call_args
     assert call.args == ("con_dex_helper", side)
