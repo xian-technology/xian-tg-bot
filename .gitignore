@@ -167,3 +167,6 @@ dat
 bck
 .DS_Store
 graphify-out/
+
+# ub-mode quality-tool output (crapper, dryer, mutator)
+.metrics/
