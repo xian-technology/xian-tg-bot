@@ -185,6 +185,10 @@ HTTP session across SDK clients and closes it during shutdown. Chart image
 rendering with Kaleido 1.x requires Chrome; install it with
 `uv run plotly_get_chrome` before enabling chart commands.
 
+`price` and `chart` read pair-filtered, time-bounded candles from the node's
+BDS `dex_candles` query (`dex_candles.py`), so the configured node must run
+with BDS enabled. Pair and token symbols still come from BDS GraphQL.
+
 ## Operational logs
 
 Run `uv sync` before starting the PM2 profile: `start.sh` uses the existing

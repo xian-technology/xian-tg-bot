@@ -31,62 +31,37 @@ async def test_token_symbols_decode_bds_state_values(module: str, cls: str, meth
     assert symbols == {"con_dex_demo_token": "XDT", "currency": "XIAN"}
 
 
-def swap(pair: int, created: str) -> dict[str, Any]:
-    return {"node": {"dataIndexed": f'{{"to":"abc","pair":{pair}}}',
-                     "data": '{"amount0In":{"__fixed__":"1.5"},"amount1In":0}', "created": created}}
+async def test_pairs_decode_json_text_and_documents() -> None:
+    import dex_pairs
 
-
-@pytest.mark.parametrize(("module", "cls", "method"), [
-    ("plg.price.price", "Price", "fetch_swap_events"),
-    ("plg.chart.chart", "Chart", "fetch_swap_events_from_graphql"),
-])
-async def test_swap_events_query_current_schema_and_keep_one_pair(module: str, cls: str, method: str) -> None:
-    queries = []
-
-    async def graphql(query: str, variables: Any = None) -> dict[str, Any]:
-        queries.append((query, variables))
-        # Event rows expose createdAt; dataIndexed is JSON text and not filterable
-        assert "createdAt" in query and "CREATED_AT_DESC" in query
-        assert "contains" not in query and "CREATED_DESC" not in query
+    async def graphql(query: str) -> dict[str, Any]:
+        assert query == "PAIRS"
         return {"data": {"allEvents": {"edges": [
-            swap(2, "2026-11-12T00:46:34+00:00"), swap(1, "2026-11-12T00:46:32+00:00"),
+            {"node": {"dataIndexed": '{"token0":"con_a","token1":"currency"}', "data": '{"pair":1}'}},
+            {"node": {"dataIndexed": {"token0": "con_b", "token1": "currency"}, "data": {"pair": 2}}},
         ]}}}
 
-    plugin_cls = getattr(__import__(module, fromlist=[cls]), cls)
-    plugin = plugin_cls.__new__(plugin_cls)
-    plugin._name = cls.lower()
-    plugin.fetch_graphql = graphql
-
-    edges = await getattr(plugin, method)(1)
-
-    assert [edge["node"]["created"] for edge in edges] == ["2026-11-12T00:46:32+00:00"]
-    assert len(queries) == 1
+    assert await dex_pairs.pairs(graphql, "PAIRS") == [
+        {"id": 1, "token0": "con_a", "token1": "currency"},
+        {"id": 2, "token0": "con_b", "token1": "currency"},
+    ]
 
 
-async def test_chart_renders_a_photo_for_recent_swaps() -> None:
-    import inspect
-    import json
-    from datetime import timedelta
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
+async def test_no_pairs_and_no_symbols() -> None:
+    import dex_pairs
 
-    from plg.chart.chart import Chart
-    from utils import utc_now
+    async def graphql(query: str) -> dict[str, Any]:
+        return {"data": {"allEvents": {"edges": []}, "symbol_0": {"nodes": []}}}
 
-    def trade(minutes_ago: int, amount_in: str, amount_out: str) -> dict[str, Any]:
-        created = (utc_now() - timedelta(minutes=minutes_ago)).isoformat()
-        data = {"amount0In": 0, "amount1In": {"__fixed__": amount_in},
-                "amount0Out": {"__fixed__": amount_out}, "amount1Out": 0}
-        return {"node": {"dataIndexed": json.dumps({"pair": 1}), "data": json.dumps(data), "created": created}}
+    assert await dex_pairs.pairs(graphql, "PAIRS") == []
+    assert await dex_pairs.token_symbols(graphql, []) == {}
+    assert await dex_pairs.token_symbols(graphql, ["con_a"]) == {}
 
-    plugin = Chart.__new__(Chart)
-    plugin.find_pair_by_symbols = AsyncMock(return_value={"id": 1, "token0_symbol": "XDT", "token1_symbol": "XIAN"})
-    plugin.fetch_swap_events = AsyncMock(return_value=[trade(90, "2.02", "2"), trade(30, "1.01", "1")])
-    message = SimpleNamespace(reply_text=AsyncMock(), reply_photo=AsyncMock())
 
-    await inspect.unwrap(Chart.chart_callback)(
-        plugin, SimpleNamespace(message=message), SimpleNamespace(args=["XDT-XIAN", "3h"]),
-    )
+async def test_non_text_symbols_keep_their_json_spelling() -> None:
+    import dex_pairs
 
-    message.reply_text.assert_not_awaited()
-    message.reply_photo.assert_awaited_once()
+    async def graphql(query: str) -> dict[str, Any]:
+        return {"data": {"symbol_0": {"nodes": [{"value": "123"}]}}}
+
+    assert await dex_pairs.token_symbols(graphql, ["con_a"]) == {"con_a": "123"}

@@ -1,6 +1,5 @@
 import io
-import json
-from datetime import timedelta
+from dataclasses import asdict
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,14 +9,15 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+import dex_pairs
+from dex_candles import Candle, Timeframe, market, request_or_reply
 from logging_setup import error_context
 from plugin import TGBFPlugin
-from transactions import trade_amount
-from utils import bds_state_value, parse_utc_datetime, swap_edges_for_pair, utc_now
+from utils import utc_now
 
 
 class Chart(TGBFPlugin):
-    """Plugin for displaying candlestick charts using XIAN DEX GraphQL data"""
+    """Plugin for displaying candlestick charts from the node's DEX candles"""
 
     async def init(self):
         # Add the command handler
@@ -30,7 +30,6 @@ class Chart(TGBFPlugin):
         await self.load_initial_data()
 
         # Set up background jobs
-        self.run_repeating(self.update_trades_job, interval=60)  # Every minute
         self.run_repeating(self.update_pairs_job, interval=303)  # Every 5 minutes
         self.run_repeating(self.update_tokens_job, interval=306)  # Every 5 minutes
 
@@ -65,21 +64,8 @@ class Chart(TGBFPlugin):
             await self.exec_sql(tokens_sql)
             self.log.info("Created chart_tokens table")
 
-        # Create trades table
-        if not await self.table_exists("chart_trades"):
-            trades_sql = """
-                         CREATE TABLE chart_trades \
-                         ( \
-                             id         TEXT PRIMARY KEY, \
-                             pair_id    TEXT      NOT NULL, \
-                             timestamp  TIMESTAMP NOT NULL, \
-                             data       TEXT      NOT NULL, \
-                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
-                             FOREIGN KEY (pair_id) REFERENCES chart_pairs (id)
-                         ) \
-                         """
-            await self.exec_sql(trades_sql)
-            self.log.info("Created chart_trades table")
+        # Trades come from the node's dex_candles query; drop the old local trade cache.
+        await self.exec_sql("DROP TABLE IF EXISTS chart_trades")
 
     async def load_initial_data(self):
         """Load initial data into the database on startup"""
@@ -114,96 +100,17 @@ class Chart(TGBFPlugin):
 
                     self.log.info(f"Loaded {len(token_symbols)} token symbols on startup")
 
-            # We don't load trades on startup as there could be too many
-            # They'll be loaded when needed or by the background job
-
         except Exception as e:
             self.log.bind(**error_context(e), handler='load_initial_data').error('Load initial data failed')
             await self.notify(e)
 
     async def fetch_pairs_from_graphql(self):
         """Fetch pairs directly from GraphQL, without database interaction"""
-        pairs_query = await self.get_resource("get_pairs.gql")
-        result = await self.fetch_graphql(pairs_query)
-        pairs = []
-
-        if not result.get('data', {}).get('allEvents', {}).get('edges'):
-            return pairs
-
-        for edge in result['data']['allEvents']['edges']:
-            if isinstance(edge['node']['dataIndexed'], str):
-                data_indexed = json.loads(edge['node']['dataIndexed'])
-            else:
-                data_indexed = edge['node']['dataIndexed']
-
-            if isinstance(edge['node']['data'], str):
-                pair_data = json.loads(edge['node']['data'])
-            else:
-                pair_data = edge['node']['data']
-
-            pairs.append({
-                'id': pair_data['pair'],
-                'token0': data_indexed['token0'],
-                'token1': data_indexed['token1']
-            })
-
-        return pairs
+        return await dex_pairs.pairs(self.fetch_graphql, await self.get_resource("get_pairs.gql"))
 
     async def fetch_token_symbols_from_graphql(self, token_contracts):
         """Fetch token symbols directly from GraphQL, without database interaction"""
-        if not token_contracts:
-            return {}
-
-        # Build a combined GraphQL query for all tokens
-        query_parts = []
-        for i, token in enumerate(token_contracts):
-            query_parts.append(f"""
-                symbol_{i}: allStates(condition: {{key: "{token}.metadata:token_symbol"}}) {{
-                    nodes {{
-                        key
-                        value
-                    }}
-                }}
-            """)
-
-        full_query = f"query GetTokensMetadata {{{' '.join(query_parts)}}}"
-
-        result = await self.fetch_graphql(full_query)
-
-        token_symbols = {}
-        for i, token in enumerate(token_contracts):
-            symbol_data = result.get('data', {}).get(f'symbol_{i}', {}).get('nodes', [])
-            if symbol_data and len(symbol_data) > 0:
-                value = bds_state_value(symbol_data[0].get('value'))
-                if value:
-                    symbol = value if isinstance(value, str) else json.dumps(value)
-                    token_symbols[token] = symbol
-
-        return token_symbols
-
-    async def fetch_swap_events_from_graphql(self, pair_id):
-        """Fetch swap events directly from GraphQL, without database interaction"""
-        query = await self.get_resource("get_swap_events.gql")
-        result = await self.fetch_graphql(query)
-        return swap_edges_for_pair(result.get('data', {}).get('allEvents', {}).get('edges', []), pair_id)
-
-    async def update_trades_job(self, context: CallbackContext):
-        """Background job to update trades for all known pairs"""
-        try:
-            # Get all known pairs from the database
-            sql = "SELECT id FROM chart_pairs"
-            result = await self.exec_sql(sql)
-
-            if not result["success"] or not result["data"]:
-                return
-
-            for pair_data in result["data"]:
-                pair_id = pair_data[0]
-                await self.fetch_and_store_new_trades(pair_id)
-
-        except Exception as e:
-            self.log.bind(**error_context(e), handler='update_trades_job').error('Update trades job failed')
-            await self.notify(e)
+        return await dex_pairs.token_symbols(self.fetch_graphql, token_contracts)
 
     async def update_pairs_job(self, context: CallbackContext):
         """Background job to update trading pairs"""
@@ -264,145 +171,6 @@ class Chart(TGBFPlugin):
             self.log.bind(**error_context(e), handler='update_tokens_job').error('Update tokens job failed')
             await self.notify(e)
 
-    async def update_trades_for_pair(self, pair_id):
-        """Update trades for a specific pair"""
-        try:
-            # Get the latest trade timestamp for this pair
-            sql = """
-                  SELECT timestamp \
-                  FROM chart_trades
-                  WHERE pair_id = ?
-                  ORDER BY timestamp DESC
-                  LIMIT 1 \
-                  """
-            result = await self.exec_sql(sql, pair_id)
-
-            last_timestamp = None
-            if result["success"] and result["data"]:
-                last_timestamp_str = result["data"][0][0]
-                last_timestamp = parse_utc_datetime(last_timestamp_str)
-
-            # Fetch new trades from GraphQL
-            events = await self.fetch_swap_events(pair_id)
-            if not events:
-                return
-
-            # Process events into trades
-            new_trades = []
-            for edge in events:
-                node = edge["node"]
-
-                # Parse data
-                swap_data = json.loads(node["data"]) if isinstance(node["data"], str) else node["data"]
-
-                # Parse timestamp
-                timestamp_str = node["created"]
-                timestamp = parse_utc_datetime(timestamp_str)
-
-                # Skip if we already have this trade
-                if last_timestamp and timestamp <= last_timestamp:
-                    continue
-
-                amount0_in = float(trade_amount(swap_data.get("amount0In", 0) or 0))
-                amount0_out = float(trade_amount(swap_data.get("amount0Out", 0) or 0))
-                amount1_in = float(trade_amount(swap_data.get("amount1In", 0) or 0))
-                amount1_out = float(trade_amount(swap_data.get("amount1Out", 0) or 0))
-
-                # Calculate price (this is simplified, the actual price calculation
-                # depends on which token is the base token)
-                price = 0
-                volume = 0
-
-                if amount0_out > 0 and amount1_in > 0:
-                    price = amount1_in / amount0_out
-                    volume = amount0_out
-                elif amount0_in > 0 and amount1_out > 0:
-                    price = amount1_out / amount0_in
-                    volume = amount0_in
-
-                # Create a unique ID for this trade
-                trade_id = f"{pair_id}_{timestamp_str}"
-
-                new_trades.append({
-                    "id": trade_id,
-                    "pair_id": pair_id,
-                    "timestamp": timestamp,
-                    "price": price,
-                    "volume": volume,
-                    "amount0_in": amount0_in,
-                    "amount0_out": amount0_out,
-                    "amount1_in": amount1_in,
-                    "amount1_out": amount1_out
-                })
-
-            # Save new trades to database
-            if new_trades:
-                for trade in new_trades:
-                    sql = """
-                          INSERT OR IGNORE INTO chart_trades
-                          (id, pair_id, timestamp, price, volume, amount0_in, amount0_out, amount1_in, amount1_out)
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
-                          """
-                    await self.exec_sql(
-                        sql,
-                        trade["id"],
-                        trade["pair_id"],
-                        trade["timestamp"].isoformat(),
-                        trade["price"],
-                        trade["volume"],
-                        trade["amount0_in"],
-                        trade["amount0_out"],
-                        trade["amount1_in"],
-                        trade["amount1_out"]
-                    )
-
-                self.log.info(f"Added {len(new_trades)} new trades for pair {pair_id}")
-
-        except Exception as e:
-            self.log.bind(**error_context(e), handler='update_trades_for_pair').error('Update trades for pair failed')
-            await self.notify(e)
-
-    def calculate_24h_volume_from_trades(self, events, base_is_token0=True):
-        """Calculate 24h volume directly from raw trade events"""
-        if not events:
-            return 0
-
-        hours_24_ago = utc_now() - timedelta(hours=24)
-        volume_24h = 0
-
-        for edge in events:
-            node = edge['node']
-
-            # Parse timestamp
-            timestamp_str = node['created']
-            timestamp = parse_utc_datetime(timestamp_str)
-
-            # Skip trades older than 24 hours
-            if timestamp < hours_24_ago:
-                continue
-
-            # Parse trade data
-            swap_data = json.loads(node['data']) if isinstance(node['data'], str) else node['data']
-
-            amount0_in = float(trade_amount(swap_data.get('amount0In', 0) or 0))
-            amount0_out = float(trade_amount(swap_data.get('amount0Out', 0) or 0))
-            amount1_in = float(trade_amount(swap_data.get('amount1In', 0) or 0))
-            amount1_out = float(trade_amount(swap_data.get('amount1Out', 0) or 0))
-
-            # Calculate volume for this trade in base token
-            if amount0_out > 0 and amount1_in > 0:
-                # Buying token0 with token1
-                volume = amount0_out if base_is_token0 else amount1_in
-            elif amount0_in > 0 and amount1_out > 0:
-                # Selling token0 for token1
-                volume = amount0_in if base_is_token0 else amount1_out
-            else:
-                volume = 0
-
-            volume_24h += volume
-
-        return volume_24h
-
     @TGBFPlugin.logging()
     @TGBFPlugin.send_typing()
     @TGBFPlugin.blacklist()
@@ -411,294 +179,32 @@ class Chart(TGBFPlugin):
         # Don't deal with edited messages
         if not update.message:
             return
+        request = await request_or_reply(update.message, context.args, "72h", self.get_info)
+        if request is None:
+            return
+        try:
+            await self.reply_chart(update.message, *request)
+        except Exception as e:
+            self.log.bind(**error_context(e), handler='chart_callback').error('Chart callback failed')
 
-        # Set default values when no arguments provided
-        if not context.args:
-            context.args = ["XIAN-XUSDC", "72h"]
-        elif len(context.args) == 1:
-            # One argument - could be a timeframe or a ticker/pair
-            arg = context.args[0]
-
-            # Check if it's a timeframe (ends with h, d, or m and has numbers)
-            if (arg.lower().endswith(('h', 'd', 'm')) and
-                    any(c.isdigit() for c in arg)):
-                # It's a timeframe, use default pair
-                context.args = ["XIAN-XUSDC", arg]
-            else:
-                # It's a ticker or pair
-                if '-' not in arg:
-                    # It's a ticker, construct ticker-XIAN pair
-                    context.args = [f"{arg.upper()}-XIAN", "72h"]
-                else:
-                    # It's already a pair, add default timeframe
-                    context.args = [arg, "72h"]
-        elif len(context.args) == 2:
-            # If first argument is just a ticker (no dash), construct ticker-XIAN pair
-            if '-' not in context.args[0]:
-                context.args[0] = f"{context.args[0].upper()}-XIAN"
-        else:
-            await update.message.reply_text(
-                await self.get_info()
-            )
+    async def reply_chart(self, message, base_symbol: str, quote_symbol: str, timeframe: Timeframe):
+        pair_name = f"{base_symbol}-{quote_symbol}"
+        pair = await self.find_pair_by_symbols(base_symbol, quote_symbol)
+        if not pair:
+            await message.reply_text(f"{con.ERROR} Trading pair {pair_name} not found")
+            return
+        data = await market(await self.get_xian(), pair, base_symbol, timeframe, utc_now())
+        if not data.window:
+            await message.reply_text(f"{con.INFO} No trades for {pair_name} in the last {timeframe}")
             return
 
-        # Parse trading pair symbol (e.g., "XIANUSDT")
-        pair_str = context.args[0].upper()
-
-        # Split the pair string (e.g., "XIANUSDT" -> "XIAN", "USDT")
-        if "-" in pair_str:
-            base_symbol, quote_symbol = pair_str.split("-")
-        else:
-            base_symbol = pair_str
-            quote_symbol = "XUSDC"  # Default
-
-        # Default to 1h candles for last 100 hours if no timeframe specified
-        interval_minutes = 60  # 1 hour
-        limit = 100  # 100 intervals
-
-        # Parse timeframe if provided
-        if len(context.args) == 2:
-            timeframe = context.args[1].lower()
-            if timeframe.endswith('h'):
-                try:
-                    hours = int(timeframe[:-1])
-                    limit = hours
-                    interval_minutes = 60  # 1 hour candles
-                except ValueError:
-                    await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use [number]h for hours"
-                    )
-                    return
-            elif timeframe.endswith('d'):
-                try:
-                    days = int(timeframe[:-1])
-                    limit = days
-                    interval_minutes = 1440  # Daily candles (24 hours)
-                except ValueError:
-                    await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use [number]d for days"
-                    )
-                    return
-            elif timeframe.endswith('m'):
-                try:
-                    minutes = int(timeframe[:-1])
-                    limit = minutes
-                    interval_minutes = 1  # Minute candles
-                except ValueError:
-                    await update.message.reply_text(
-                        f"{con.ERROR} Invalid timeframe format. Use [number]m for minutes"
-                    )
-                    return
-            else:
-                await update.message.reply_text(
-                    f"{con.ERROR} Invalid timeframe format. Use h for hours, d for days, or m for minutes"
-                )
-                return
-
-        try:
-            # Find the pair by symbols
-            pair = await self.find_pair_by_symbols(base_symbol, quote_symbol)
-
-            if not pair:
-                await update.message.reply_text(f"{con.ERROR} Trading pair {base_symbol}-{quote_symbol} not found")
-                return
-
-            # Determine if base token is token0 or token1
-            base_is_token0 = pair.get('token0_symbol', '').upper() == base_symbol.upper()
-
-            # Get swap events
-            events = await self.fetch_swap_events(pair['id'])
-
-            if not events:
-                await update.message.reply_text(f"{con.ERROR} No swap events found for {base_symbol}-{quote_symbol}")
-                return
-
-            # Process into candles
-            candles = self.process_swap_events(events, interval_minutes, limit, base_is_token0)
-
-            if not candles:
-                timeframe_str = context.args[1] if len(context.args) > 1 else '72h'
-                await update.message.reply_text(
-                    f"{con.INFO} No trades found for {base_symbol}-{quote_symbol} "
-                    f"in the last {timeframe_str}")
-                return
-
-            # Create DataFrame for Plotly
-            df = pd.DataFrame(candles)
-
-            # Current price for price line
-            current_price = df['close'].values[-1]
-
-            # Calculate min and max price for better y-axis scaling (add 5% padding)
-            y_min = min(df['low']) * 0.95
-            y_max = max(df['high']) * 1.05
-
-            # Define colors
-            up_color = 'rgb(0, 171, 107)'  # Green for bullish candles
-            down_color = 'rgb(255, 73, 73)'  # Red for bearish candles
-            bg_color = 'rgb(25, 25, 40)'  # Dark blue background
-            grid_color = 'rgba(255, 255, 255, 0.1)'  # Subtle grid
-            text_color = 'rgba(255, 255, 255, 0.9)'  # White text
-
-            tf = context.args[1] if len(context.args) > 1 else '72h'
-
-            # Create a new figure with subplots (price and volume)
-            fig = make_subplots(
-                rows=2,
-                cols=1,
-                shared_xaxes=True,
-                vertical_spacing=0.03,
-                row_heights=[0.8, 0.2],
-                subplot_titles=(f"{base_symbol}-{quote_symbol} {tf}", "Volume")
-            )
-
-            # Add candlestick trace
-            fig.add_trace(
-                go.Candlestick(
-                    x=df['time'],
-                    open=df['open'],
-                    high=df['high'],
-                    low=df['low'],
-                    close=df['close'],
-                    increasing=dict(line=dict(color=up_color), fillcolor=up_color),
-                    decreasing=dict(line=dict(color=down_color), fillcolor=down_color),
-                    name='Price'
-                ),
-                row=1, col=1
-            )
-
-            # Calculate and add volume bars
-            colors = [up_color if df['close'][i] >= df['open'][i] else down_color for i in range(len(df))]
-            fig.add_trace(
-                go.Bar(
-                    x=df['time'],
-                    y=df['volume'],
-                    marker_color=colors,
-                    name='Volume',
-                    opacity=0.7
-                ),
-                row=2, col=1
-            )
-
-            # Add moving averages if we have enough data
-            if len(df) >= 20:
-                df['MA20'] = df['close'].rolling(window=20).mean()
-                fig.add_trace(
-                    go.Scatter(
-                        x=df['time'],
-                        y=df['MA20'],
-                        line=dict(color='rgba(255, 207, 0, 0.7)', width=2),
-                        name='20-period MA'
-                    ),
-                    row=1, col=1
-                )
-
-            if len(df) >= 50:
-                df['MA50'] = df['close'].rolling(window=50).mean()
-                fig.add_trace(
-                    go.Scatter(
-                        x=df['time'],
-                        y=df['MA50'],
-                        line=dict(color='rgba(144, 238, 144, 0.7)', width=2),
-                        name='50-period MA'
-                    ),
-                    row=1, col=1
-                )
-
-            # Add current price line
-            fig.add_shape(
-                type="line",
-                # Shape coordinates are not encoded like trace data: pass ISO text
-                x0=df['time'].min().isoformat(),
-                x1=df['time'].max().isoformat(),
-                y0=current_price,
-                y1=current_price,
-                line=dict(color='rgba(102, 204, 255, 0.8)', width=2, dash="dot"),
-                row=1, col=1
-            )
-
-            # Update layout with modern styling
-            fig.update_layout(
-                paper_bgcolor=bg_color,
-                plot_bgcolor=bg_color,
-                font=dict(
-                    family="Arial, sans-serif",
-                    size=13,
-                    color=text_color
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.05,
-                    xanchor="center",
-                    x=0.5,
-                    bgcolor="rgba(0,0,0,0.3)",
-                    bordercolor="rgba(255,255,255,0.2)",
-                    font=dict(color=text_color)
-                ),
-                margin=dict(l=60, r=60, t=80, b=60),
-                height=700,  # Taller chart for better visibility
-                hovermode="x unified",
-                xaxis_rangeslider_visible=False
-            )
-
-            # Style the main price chart
-            fig.update_xaxes(
-                row=1, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color,
-                showspikes=True,
-                spikethickness=1,
-                spikedash="solid",
-                spikecolor="rgba(255,255,255,0.4)",
-                spikemode="across"
-            )
-
-            fig.update_yaxes(
-                row=1, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color,
-                title=dict(text=f"Price ({quote_symbol})", font=dict(size=13)),
-                showspikes=True,
-                spikethickness=1,
-                spikedash="solid",
-                spikecolor="rgba(255,255,255,0.4)",
-                spikemode="across",
-                range=[y_min, y_max]  # Set y-axis range with padding
-            )
-
-            # Style the volume chart
-            fig.update_xaxes(
-                row=2, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color
-            )
-
-            fig.update_yaxes(
-                row=2, col=1,
-                gridcolor=grid_color,
-                zerolinecolor=grid_color,
-                title=dict(text=f"Volume ({base_symbol})", font=dict(size=13))
-            )
-
-            # Calculate 24h volume (if we have enough data)
-            volume_24h = self.calculate_24h_volume_from_trades(events, base_is_token0)
-
-            caption = (
-                f"<code>Last Price: {current_price:,.8g} {quote_symbol}</code>\n"
-                f"<code>24h Volume: {volume_24h:,.2f} {base_symbol}</code>"
-            )
-
-            # Send chart as photo with higher resolution
-            await update.message.reply_photo(
-                photo=io.BufferedReader(io.BytesIO(pio.to_image(fig, format='png', scale=2))),
-                caption=caption
-            )
-
-        except Exception as e:
-            #await update.message.reply_text(f"{con.ERROR} Error creating chart: {e}")
-            self.log.bind(**error_context(e), handler='chart_callback').error('Chart callback failed')
-            #await self.notify(e)
+        volume_24h = data.day.volume if data.day else 0
+        caption = (
+            f"<code>Last Price: {data.window[-1].close:,.8g} {quote_symbol}</code>\n"
+            f"<code>24h Volume: {volume_24h:,.2f} {base_symbol}</code>"
+        )
+        image = chart_image(data.window, base_symbol, quote_symbol, timeframe)
+        await message.reply_photo(photo=io.BufferedReader(io.BytesIO(image)), caption=caption)
 
     async def fetch_pairs(self):
         """Fetch pairs from database, or from GraphQL if not available"""
@@ -842,249 +348,164 @@ class Chart(TGBFPlugin):
 
         return None
 
-    async def fetch_swap_events(self, pair_id):
-        """Fetch swap events from database, fetching new events from GraphQL if needed"""
-        # First check if we need to update from GraphQL
-        await self.fetch_and_store_new_trades(pair_id)
 
-        # Get all trades from database
-        sql = """
-              SELECT timestamp, data
-              FROM chart_trades
-              WHERE pair_id = ?
-              ORDER BY timestamp DESC \
-              """
-        result = await self.exec_sql(sql, pair_id)
+def chart_image(window: list[Candle], base_symbol: str, quote_symbol: str, timeframe: Timeframe) -> bytes:
+    """PNG candlestick and volume chart of the window."""
+    df = pd.DataFrame([asdict(candle) for candle in window])
 
-        edges = []
-        if result["success"] and result["data"]:
-            for row in result["data"]:
-                timestamp = row[0]
-                trade_data = json.loads(row[1])
+    # Current price for price line
+    current_price = df['close'].values[-1]
 
-                # Create a node structure similar to what comes from GraphQL
-                node = {
-                    "dataIndexed": json.dumps({"pair": pair_id}),
-                    "data": json.dumps(trade_data),
-                    "created": timestamp
-                }
+    # Calculate min and max price for better y-axis scaling (add 5% padding)
+    y_min = min(df['low']) * 0.95
+    y_max = max(df['high']) * 1.05
 
-                edges.append({"node": node})
+    # Define colors
+    up_color = 'rgb(0, 171, 107)'  # Green for bullish candles
+    down_color = 'rgb(255, 73, 73)'  # Red for bearish candles
+    bg_color = 'rgb(25, 25, 40)'  # Dark blue background
+    grid_color = 'rgba(255, 255, 255, 0.1)'  # Subtle grid
+    text_color = 'rgba(255, 255, 255, 0.9)'  # White text
 
-        return edges
+    tf = str(timeframe)
 
-    async def fetch_and_store_new_trades(self, pair_id):
-        """Fetch new trades from GraphQL and store them in the database"""
-        try:
-            # Get the latest trade timestamp for this pair
-            sql = """
-                  SELECT timestamp \
-                  FROM chart_trades
-                  WHERE pair_id = ?
-                  ORDER BY timestamp DESC
-                  LIMIT 1 \
-                  """
-            result = await self.exec_sql(sql, pair_id)
+    # Create a new figure with subplots (price and volume)
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=[0.8, 0.2],
+        subplot_titles=(f"{base_symbol}-{quote_symbol} {tf}", "Volume")
+    )
 
-            last_timestamp = None
-            if result["success"] and result["data"]:
-                last_timestamp_str = result["data"][0][0]
-                last_timestamp = parse_utc_datetime(last_timestamp_str)
+    # Add candlestick trace
+    fig.add_trace(
+        go.Candlestick(
+            x=df['time'],
+            open=df['open'],
+            high=df['high'],
+            low=df['low'],
+            close=df['close'],
+            increasing=dict(line=dict(color=up_color), fillcolor=up_color),
+            decreasing=dict(line=dict(color=down_color), fillcolor=down_color),
+            name='Price'
+        ),
+        row=1, col=1
+    )
 
-            # Fetch new trades from GraphQL
-            events = await self.fetch_swap_events_from_graphql(pair_id)
-            if not events:
-                return
+    # Calculate and add volume bars
+    colors = [up_color if df['close'][i] >= df['open'][i] else down_color for i in range(len(df))]
+    fig.add_trace(
+        go.Bar(
+            x=df['time'],
+            y=df['volume'],
+            marker_color=colors,
+            name='Volume',
+            opacity=0.7
+        ),
+        row=2, col=1
+    )
 
-            # Process and store new events
-            new_trades = 0
-            for edge in events:
-                node = edge["node"]
-
-                # Parse timestamp
-                timestamp_str = node["created"]
-                timestamp = parse_utc_datetime(timestamp_str)
-
-                # Skip if we already have this trade
-                if last_timestamp and timestamp <= last_timestamp:
-                    continue
-
-                # Parse data
-                data = node["data"]
-                if isinstance(data, str):
-                    data = json.loads(data)
-
-                # Create trade ID
-                trade_id = f"{pair_id}_{timestamp_str}"
-
-                # Save to database
-                sql = """
-                      INSERT OR IGNORE INTO chart_trades
-                          (id, pair_id, timestamp, data)
-                      VALUES (?, ?, ?, ?) \
-                      """
-                result = await self.exec_sql(
-                    sql,
-                    trade_id,
-                    pair_id,
-                    timestamp.isoformat(),
-                    json.dumps(data)
-                )
-
-                if result["success"]:
-                    new_trades += 1
-
-            if new_trades > 0:
-                self.log.info(f"Added {new_trades} new trades for pair {pair_id}")
-
-        except Exception as e:
-            self.log.bind(**error_context(e), handler='fetch_and_store_new_trades').error('Fetch and store new trades failed')
-            await self.notify(e)
-
-    def process_swap_events(self, events, interval_minutes, limit, base_is_token0=True):
-        """Convert swap events to candlestick data"""
-        if not events:
-            return []
-
-        # Hardcode the first trade timestamp
-        FIRST_TRADE_TIMESTAMP = parse_utc_datetime("2025-03-27T17:29:38")
-
-        # Extract trades
-        trades = []
-        for edge in events:
-            node = edge['node']
-
-            # Parse data
-            swap_data = json.loads(node['data']) if isinstance(node['data'], str) else node['data']
-
-            # Parse the timestamp (ensure UTC)
-            timestamp_str = node['created']
-            timestamp = parse_utc_datetime(timestamp_str)
-
-            # Calculate price
-            amount0_in = float(trade_amount(swap_data.get('amount0In', 0) or 0))
-            amount0_out = float(trade_amount(swap_data.get('amount0Out', 0) or 0))
-            amount1_in = float(trade_amount(swap_data.get('amount1In', 0) or 0))
-            amount1_out = float(trade_amount(swap_data.get('amount1Out', 0) or 0))
-
-            price = None
-            volume = 0
-
-            if amount0_out > 0 and amount1_in > 0:
-                # Buying token0 with token1
-                price = amount1_in / amount0_out
-                # Volume in base token
-                volume = amount0_out if base_is_token0 else amount1_in
-            elif amount0_in > 0 and amount1_out > 0:
-                # Selling token0 for token1
-                price = amount1_out / amount0_in
-                # Volume in base token
-                volume = amount0_in if base_is_token0 else amount1_out
-
-            # Invert price if base is token1 instead of token0
-            if price is not None and not base_is_token0:
-                price = 1 / price
-                # Volume is already correctly calculated based on base_is_token0
-
-            if price:
-                trades.append({
-                    'timestamp': timestamp,
-                    'price': price,
-                    'volume': volume
-                })
-
-        # Sort by timestamp (oldest first)
-        trades.sort(key=lambda x: x['timestamp'])
-
-        if not trades:
-            return []
-
-        # Get time boundaries for candles
-        current_time = utc_now()
-        requested_start_time = current_time - timedelta(minutes=interval_minutes * limit)
-
-        # Ensure we don't go before the first trade timestamp
-        start_time = max(requested_start_time, FIRST_TRADE_TIMESTAMP)
-
-        # Round to interval boundaries (as in web implementation)
-        rounded_start = start_time.replace(
-            minute=(start_time.minute // interval_minutes) * interval_minutes,
-            second=0,
-            microsecond=0
+    # Add moving averages if we have enough data
+    if len(df) >= 20:
+        df['MA20'] = df['close'].rolling(window=20).mean()
+        fig.add_trace(
+            go.Scatter(
+                x=df['time'],
+                y=df['MA20'],
+                line=dict(color='rgba(255, 207, 0, 0.7)', width=2),
+                name='20-period MA'
+            ),
+            row=1, col=1
         )
 
-        # Use current time for the end boundary to include in-progress candle
-        current_interval_start = current_time.replace(
-            minute=(current_time.minute // interval_minutes) * interval_minutes,
-            second=0,
-            microsecond=0
+    if len(df) >= 50:
+        df['MA50'] = df['close'].rolling(window=50).mean()
+        fig.add_trace(
+            go.Scatter(
+                x=df['time'],
+                y=df['MA50'],
+                line=dict(color='rgba(144, 238, 144, 0.7)', width=2),
+                name='50-period MA'
+            ),
+            row=1, col=1
         )
 
-        # Calculate the next interval after current for proper boundaries
-        next_interval = current_interval_start + timedelta(minutes=interval_minutes)
+    # Add current price line
+    fig.add_shape(
+        type="line",
+        # Shape coordinates are not encoded like trace data: pass ISO text
+        x0=df['time'].min().isoformat(),
+        x1=df['time'].max().isoformat(),
+        y0=current_price,
+        y1=current_price,
+        line=dict(color='rgba(102, 204, 255, 0.8)', width=2, dash="dot"),
+        row=1, col=1
+    )
 
-        # Generate all intervals
-        intervals = []
-        current = rounded_start
-        while current <= current_interval_start:
-            intervals.append(current)
-            current += timedelta(minutes=interval_minutes)
+    # Update layout with modern styling
+    fig.update_layout(
+        paper_bgcolor=bg_color,
+        plot_bgcolor=bg_color,
+        font=dict(
+            family="Arial, sans-serif",
+            size=13,
+            color=text_color
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.05,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(0,0,0,0.3)",
+            bordercolor="rgba(255,255,255,0.2)",
+            font=dict(color=text_color)
+        ),
+        margin=dict(l=60, r=60, t=80, b=60),
+        height=700,  # Taller chart for better visibility
+        hovermode="x unified",
+        xaxis_rangeslider_visible=False
+    )
 
-        # Add one more interval for the future (needed for proper interval boundaries)
-        intervals.append(next_interval)
+    # Style the main price chart
+    fig.update_xaxes(
+        row=1, col=1,
+        gridcolor=grid_color,
+        zerolinecolor=grid_color,
+        showspikes=True,
+        spikethickness=1,
+        spikedash="solid",
+        spikecolor="rgba(255,255,255,0.4)",
+        spikemode="across"
+    )
 
-        # Process candles
-        candles = []
-        previous_close = None
+    fig.update_yaxes(
+        row=1, col=1,
+        gridcolor=grid_color,
+        zerolinecolor=grid_color,
+        title=dict(text=f"Price ({quote_symbol})", font=dict(size=13)),
+        showspikes=True,
+        spikethickness=1,
+        spikedash="solid",
+        spikecolor="rgba(255,255,255,0.4)",
+        spikemode="across",
+        range=[y_min, y_max]  # Set y-axis range with padding
+    )
 
-        for i in range(len(intervals) - 1):
-            interval_start = intervals[i]
-            interval_end = intervals[i + 1]
+    # Style the volume chart
+    fig.update_xaxes(
+        row=2, col=1,
+        gridcolor=grid_color,
+        zerolinecolor=grid_color
+    )
 
-            # For the current in-progress interval, use actual current time as boundary
-            actual_end = current_time if interval_start == current_interval_start else interval_end
+    fig.update_yaxes(
+        row=2, col=1,
+        gridcolor=grid_color,
+        zerolinecolor=grid_color,
+        title=dict(text=f"Volume ({base_symbol})", font=dict(size=13))
+    )
 
-            # Find trades in this interval
-            interval_trades = [t for t in trades
-                               if interval_start <= t['timestamp'] < actual_end]
-
-            if interval_trades:
-                if previous_close is None:
-                    # First candle with trades
-                    candle = {
-                        'time': interval_start,
-                        'open': interval_trades[0]['price'],
-                        'high': max(t['price'] for t in interval_trades),
-                        'low': min(t['price'] for t in interval_trades),
-                        'close': interval_trades[-1]['price'],
-                        'volume': sum(t['volume'] for t in interval_trades)
-                    }
-                    previous_close = candle['close']
-                else:
-                    # Subsequent candle with trades
-                    candle = {
-                        'time': interval_start,
-                        'open': previous_close,
-                        'high': max([previous_close] + [t['price'] for t in interval_trades]),
-                        'low': min([previous_close] + [t['price'] for t in interval_trades]),
-                        'close': interval_trades[-1]['price'],
-                        'volume': sum(t['volume'] for t in interval_trades)
-                    }
-                    previous_close = candle['close']
-            elif previous_close is not None:
-                # Empty candle - maintain price from previous candle
-                candle = {
-                    'time': interval_start,
-                    'open': previous_close,
-                    'high': previous_close,
-                    'low': previous_close,
-                    'close': previous_close,
-                    'volume': 0
-                }
-            else:
-                # Skip intervals until we find the first trade
-                continue
-
-            candles.append(candle)
-
-        return candles
+    return pio.to_image(fig, format='png', scale=2)
