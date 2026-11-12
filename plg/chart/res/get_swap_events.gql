@@ -1,14 +1,13 @@
-query GetSwapEvents($pairId: String!) {
+query GetSwapEvents {
     allEvents(
         condition: {contract: "con_pairs", event: "Swap"}
-        filter: {dataIndexed: {contains: {pair: $pairId}}}
-        orderBy: CREATED_DESC
+        orderBy: CREATED_AT_DESC
     ) {
         edges {
             node {
                 dataIndexed
                 data
-                created
+                created: createdAt
             }
         }
     }

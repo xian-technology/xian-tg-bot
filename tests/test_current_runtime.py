@@ -345,3 +345,17 @@ async def test_trade_callback_submits_deadline_and_formats_typed_receipt(side: s
     assert call.args == ("con_dex_helper", side)
     assert len(call.kwargs["kwargs"]["deadline"]["__time__"]) == 7
     assert "2.500000000000000000000000000001" in message.edit_text.call_args.args[0]
+
+
+@pytest.mark.parametrize(("balance", "expected"), [
+    # The SDK returns on-chain balances as ContractingDecimal and zero as int
+    ("contracting", "XDT: 1234.5679"),
+    (0, "XDT: 0.0000"),
+])
+def test_balance_formats_sdk_balance_values(balance: Any, expected: str) -> None:
+    from xian_runtime_types.decimal import ContractingDecimal
+
+    from plg.balance.balance import Balance
+
+    value = ContractingDecimal("1234.567891234567891234567891234") if balance == "contracting" else balance
+    assert Balance.format_balance(plugin_instance(Balance), "XDT", value, 4) == expected

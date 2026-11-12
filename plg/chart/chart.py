@@ -13,7 +13,7 @@ import constants as con
 from logging_setup import error_context
 from plugin import TGBFPlugin
 from transactions import trade_amount
-from utils import parse_utc_datetime, utc_now
+from utils import bds_state_value, parse_utc_datetime, swap_edges_for_pair, utc_now
 
 
 class Chart(TGBFPlugin):
@@ -174,7 +174,7 @@ class Chart(TGBFPlugin):
         for i, token in enumerate(token_contracts):
             symbol_data = result.get('data', {}).get(f'symbol_{i}', {}).get('nodes', [])
             if symbol_data and len(symbol_data) > 0:
-                value = symbol_data[0].get('value')
+                value = bds_state_value(symbol_data[0].get('value'))
                 if value:
                     symbol = value if isinstance(value, str) else json.dumps(value)
                     token_symbols[token] = symbol
@@ -184,8 +184,8 @@ class Chart(TGBFPlugin):
     async def fetch_swap_events_from_graphql(self, pair_id):
         """Fetch swap events directly from GraphQL, without database interaction"""
         query = await self.get_resource("get_swap_events.gql")
-        result = await self.fetch_graphql(query, {'pairId': pair_id})
-        return result.get('data', {}).get('allEvents', {}).get('edges', [])
+        result = await self.fetch_graphql(query)
+        return swap_edges_for_pair(result.get('data', {}).get('allEvents', {}).get('edges', []), pair_id)
 
     async def update_trades_job(self, context: CallbackContext):
         """Background job to update trades for all known pairs"""
@@ -608,8 +608,9 @@ class Chart(TGBFPlugin):
             # Add current price line
             fig.add_shape(
                 type="line",
-                x0=df['time'].min(),
-                x1=df['time'].max(),
+                # Shape coordinates are not encoded like trace data: pass ISO text
+                x0=df['time'].min().isoformat(),
+                x1=df['time'].max().isoformat(),
                 y0=current_price,
                 y1=current_price,
                 line=dict(color='rgba(102, 204, 255, 0.8)', width=2, dash="dot"),
@@ -657,8 +658,7 @@ class Chart(TGBFPlugin):
                 row=1, col=1,
                 gridcolor=grid_color,
                 zerolinecolor=grid_color,
-                title=f"Price ({quote_symbol})",
-                titlefont=dict(size=13),
+                title=dict(text=f"Price ({quote_symbol})", font=dict(size=13)),
                 showspikes=True,
                 spikethickness=1,
                 spikedash="solid",
@@ -678,8 +678,7 @@ class Chart(TGBFPlugin):
                 row=2, col=1,
                 gridcolor=grid_color,
                 zerolinecolor=grid_color,
-                title=f"Volume ({base_symbol})",
-                titlefont=dict(size=13)
+                title=dict(text=f"Volume ({base_symbol})", font=dict(size=13))
             )
 
             # Calculate 24h volume (if we have enough data)

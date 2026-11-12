@@ -1,4 +1,5 @@
 import html
+from typing import Any
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
@@ -6,6 +7,7 @@ from telegram.ext import CallbackContext, CommandHandler
 import constants as con
 from logging_setup import error_context
 from plugin import TGBFPlugin
+from transactions import trade_amount
 
 
 class Balance(TGBFPlugin):
@@ -30,9 +32,7 @@ class Balance(TGBFPlugin):
         balances = ""
 
         try:
-            tokens_plg = self.get_plugin('tokens')
-            await tokens_plg.check_and_insert_currency(user_id)
-            tokens = await tokens_plg.get_tokens(user_id)
+            tokens = await self.get_plugin('tokens').get_tokens(user_id)
 
             for token in tokens:
                 ticker = token[2]
@@ -55,6 +55,7 @@ class Balance(TGBFPlugin):
         await message.edit_text(balances)
 
     # TODO: Remove decimals if not present etc
-    def format_balance(self, ticker: str, balance: str | float, decimals: int):
-        # Token symbols come from on-chain metadata and are rendered as HTML text
-        return f"{html.escape(str(ticker))}: {balance:.{decimals}f}"
+    def format_balance(self, ticker: str, balance: Any, decimals: int):
+        # Token symbols come from on-chain metadata and are rendered as HTML text.
+        # SDK balances are ContractingDecimal, which has no fixed-point format.
+        return f"{html.escape(str(ticker))}: {trade_amount(balance):.{decimals}f}"

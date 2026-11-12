@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -250,3 +251,13 @@ def get_ip() -> str:
 def get_external_ip(website: str = 'https://api.ipify.org/') -> str:
     import urllib.request
     return urllib.request.urlopen(website).read().decode("utf-8")
+
+
+def bds_state_value(value: Any) -> Any:
+    """A BDS state value: GraphQL returns the stored JSON document as text."""
+    return json.loads(value) if isinstance(value, str) else value
+
+
+def swap_edges_for_pair(edges: list[dict[str, Any]], pair_id: Any) -> list[dict[str, Any]]:
+    """Swap event edges of one pair; BDS cannot filter on the JSON pair field."""
+    return [edge for edge in edges if str(bds_state_value(edge["node"]["dataIndexed"])["pair"]) == str(pair_id)]

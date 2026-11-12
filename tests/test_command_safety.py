@@ -547,11 +547,12 @@ async def test_buy_bounds_input_by_fresh_quote_and_approves_exactly_that() -> No
     client = quoting_client()
     await press_trade("buy", client)
 
-    # Reserves: token0 is the bought con_a (100), so the sold con_b reserve (200) is the input side
+    # Reserves: token0 is the bought con_a (100), so the sold con_b reserve (200) is the input side.
+    # The helper quotes on both tokens' precision grids; the bound must use the same quote.
     client.call.assert_any_await(
         "con_dex", "getAmountIn",
         {"amountOut": parse_amount("2.5"), "reserveIn": parse_amount("200"),
-         "reserveOut": parse_amount("100"), "feeBps": 30},
+         "reserveOut": parse_amount("100"), "feeBps": 30, "tokenIn": "con_b", "tokenOut": "con_a"},
     )
     max_input = parse_amount("2.1")  # quoted 2 plus the configured 5% tolerance
     client.approve.assert_awaited_once_with("con_dex_helper", token="con_b", amount=max_input)

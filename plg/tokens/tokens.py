@@ -287,8 +287,9 @@ class Tokens(TGBFPlugin):
             sql = await self.get_resource('insert_token.sql')
             await self.exec_sql(sql, user_id, 'currency', 'XIAN', decimals)
 
-    # Get all tokens for current user
+    # Get all tokens for current user; the native currency is always listed
     async def get_tokens(self, user_id: int) -> list:
+        await self.check_and_insert_currency(user_id)
         sql = await self.get_resource("select_tokens.sql")
         tokens = await self.exec_sql(sql, user_id)
         return tokens['data']

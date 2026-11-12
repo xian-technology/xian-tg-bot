@@ -50,6 +50,9 @@ async def buy_max_input(
         "reserveIn": trade_amount(reserve_sell),
         "reserveOut": trade_amount(reserve_buy),
         "feeBps": fee_bps,
+        # The helper's own quote: input and output on the tokens' precision grids
+        "tokenIn": sell_token,
+        "tokenOut": buy_token,
     }))
     max_input = _bound(quote, 1 + slippage / 100, ROUND_CEILING)
     if max_input <= 0:

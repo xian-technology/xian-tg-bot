@@ -9,7 +9,7 @@ import constants as con
 from logging_setup import error_context
 from plugin import TGBFPlugin
 from transactions import trade_amount
-from utils import parse_utc_datetime, utc_now
+from utils import bds_state_value, parse_utc_datetime, swap_edges_for_pair, utc_now
 
 
 class Price(TGBFPlugin):
@@ -297,7 +297,7 @@ class Price(TGBFPlugin):
         for i, token in enumerate(token_contracts):
             symbol_data = result.get('data', {}).get(f'symbol_{i}', {}).get('nodes', [])
             if symbol_data and len(symbol_data) > 0:
-                value = symbol_data[0].get('value')
+                value = bds_state_value(symbol_data[0].get('value'))
                 if value:
                     symbol = value if isinstance(value, str) else json.dumps(value)
                     token_symbols[token] = symbol
@@ -339,8 +339,8 @@ class Price(TGBFPlugin):
     async def fetch_swap_events(self, pair_id):
         """Fetch swap events for a specific pair"""
         query = await self.get_resource("get_swap_events.gql", plugin="chart")
-        result = await self.fetch_graphql(query, {'pairId': pair_id})
-        return result.get('data', {}).get('allEvents', {}).get('edges', [])
+        result = await self.fetch_graphql(query)
+        return swap_edges_for_pair(result.get('data', {}).get('allEvents', {}).get('edges', []), pair_id)
 
     def process_swap_events(self, events, interval_minutes, limit, base_is_token0=True):
         """Convert swap events to candlestick data for price calculation"""
