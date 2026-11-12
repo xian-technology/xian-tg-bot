@@ -33,15 +33,9 @@ class Simulate(TGBFPlugin):
 
         node_url = self.cfg_global.get('xian', 'node')
 
-        # Retrieve payload string
-        content = update.message.text.split(maxsplit=1)
-        if len(content) > 1:
-            payload_str = content[1]
-        else:
-            await update.message.reply_text(
-                await self.get_info()
-            )
-            return
+        # The payload is everything after the command; context.args is
+        # non-empty, so the text has that second part
+        payload_str = update.message.text.split(maxsplit=1)[1]
 
         try:
             payload = json.loads(payload_str, parse_float=Decimal)
