@@ -116,6 +116,16 @@ async def test_simulate_reports_result_chi_and_state() -> None:
     assert "Success:\n<pre>True</pre>" in text
     assert "Chi used:\n<pre>12</pre>" in text
     assert "Returned result:\n<pre>&lt;ok&gt;</pre>" in text
+    assert "State changes:\n<pre>[{&#x27;key&#x27;: &#x27;k&#x27;, &#x27;value&#x27;: &#x27;v&#x27;}]</pre>" in text
+
+
+async def test_simulate_escapes_state_changes() -> None:
+    payload = '{"contract": "con_x"}'
+    response = {"status": 0, "result": None, "chi_used": 1, "state": [{"key": "con_x.n:<b>", "value": "</pre>"}]}
+    _, _, edit = await simulate(f"/simulate {payload}", [payload], response)
+    text = edit.await_args.args[0]
+    assert "<b>'" not in text and "'</pre>'" not in text
+    assert "con_x.n:&lt;b&gt;" in text and "&lt;/pre&gt;" in text
 
 
 async def test_simulate_marks_failed_execution() -> None:

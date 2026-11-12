@@ -73,6 +73,6 @@ class Simulate(TGBFPlugin):
                f'Success:\n<pre>{status}</pre>\n\n'
                f'Chi used:\n<pre>{chi}</pre>\n\n'
                f'Returned result:\n<pre>{html.escape(str(result))}</pre>\n\n'
-               f'State changes:\n<pre>{state}</pre>\n\n')
+               f'State changes:\n<pre>{html.escape(str(state))}</pre>\n\n')
 
         await message.edit_text(msg)
