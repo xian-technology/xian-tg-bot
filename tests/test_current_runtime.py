@@ -115,6 +115,17 @@ async def test_confirmation_timeout_retains_hash_and_does_not_resubmit() -> None
     client.send.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [(TimeoutError(), "TimeoutError"), (TimeoutError("node slow"), "node slow")],
+)
+async def test_unconfirmed_outcome_names_the_lookup_failure(error: Exception, reason: str) -> None:
+    client = SimpleNamespace(wait_for_tx=AsyncMock(side_effect=error))
+    success, result = await confirm_submission(client, submission())
+    assert success is None
+    assert result.startswith(f"Unable to confirm transaction ABC123: {reason}. ")
+
+
 async def test_confirmation_preserves_task_cancellation() -> None:
     client = SimpleNamespace(wait_for_tx=AsyncMock(side_effect=asyncio.CancelledError()))
     with pytest.raises(asyncio.CancelledError):

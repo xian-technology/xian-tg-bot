@@ -78,7 +78,7 @@ async def confirm_submission(
         )
     except (TimeoutError, XianException) as exc:
         return None, (
-            f"Unable to confirm transaction {submission.tx_hash}: {exc or type(exc).__name__}. "
+            f"Unable to confirm transaction {submission.tx_hash}: {str(exc) or type(exc).__name__}. "
             "It may still complete; check the explorer before retrying."
         )
     result = (receipt.execution or {}).get("result", receipt.message)
