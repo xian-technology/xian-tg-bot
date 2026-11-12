@@ -247,3 +247,11 @@ async def test_failed_allowance_stops_the_distribution(kind: str, overrides: dic
 async def test_failed_distribution_shows_the_reason(kind: str, overrides: dict, shown: str) -> None:
     _, _, chat, _ = await run(kind, ["10", "1h"], **overrides)
     assert chat.texts[-1] == shown
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("frame", ["nanm", "infh", "1e12h", "1e8h"])
+async def test_unrepresentable_time_frames_are_refused(kind: str, frame: str) -> None:
+    plugin, _, chat, _ = await run(kind, ["10", frame])
+    assert chat.texts == ["‼ Time frame not valid!"]
+    plugin.exec_sql.assert_not_awaited()

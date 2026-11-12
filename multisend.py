@@ -58,18 +58,19 @@ def find_token(tokens: Sequence[Sequence[Any]], name: str) -> tuple[str, str] | 
     return None
 
 
-def parse_time_frame(text: str) -> timedelta | str:
-    """The look-back window of ``<number>m`` or ``<number>h``, or the refusal text."""
+def parse_since(text: str, now: datetime) -> datetime | str:
+    """Start of the ``<number>m`` / ``<number>h`` look-back window, or the refusal text."""
     unit = TIME_UNITS.get(text[-1:].lower())
     if unit is None:
         return f"{con.ERROR} Allowed time units are <code>m</code> (minute) and <code>h</code> (hour)"
     try:
         frame = float(text[:-1])
-        if frame <= 0:
-            raise ValueError('Negative values are not allowed')
-    except ValueError:
+        if not frame > 0:
+            raise ValueError('Only positive time frames are allowed')
+        # NaN, infinity and windows reaching before year 1 are not representable
+        return now - timedelta(**{unit: frame})
+    except (ValueError, OverflowError):
         return f"{con.ERROR} Time frame not valid!"
-    return timedelta(**{unit: frame})
 
 
 def parse_amount_total(text: str) -> Decimal | None:
@@ -140,11 +141,11 @@ class MultisendPlugin(TGBFPlugin):
             await message.edit_text(f"{con.ERROR} Amount not valid!")
             return None
 
-        window = parse_time_frame(args[-1])
-        if isinstance(window, str):
-            await message.edit_text(window)
+        since = parse_since(args[-1], datetime.now(UTC))
+        if isinstance(since, str):
+            await message.edit_text(since)
             return None
-        return Request(token[0], token[1], amount_total, datetime.now(UTC) - window)
+        return Request(token[0], token[1], amount_total, since)
 
     async def _active_users(self, chat_id: int, since: datetime, user_id: int, message: Any) -> list[Any] | None:
         """Users who wrote in this chat since ``since``, without the sender."""
