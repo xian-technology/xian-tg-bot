@@ -197,6 +197,24 @@ def test_backup_never_includes_configured_secret_files(tmp_path: Path, monkeypat
     assert not plugin.should_exclude(str(tmp_path / "dat" / "global.db"), "global.db")
 
 
+def test_backup_exclusions_ignore_directories_above_the_backup_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A bot checked out under a directory called e.g. "tmp" or "log" (such as
+    # /tmp/... on Linux) must still back up its own files; only directories
+    # inside the backed-up tree are excluded by name.
+    from plg.backup.backup import Backup
+
+    bot_dir = tmp_path / "tmp" / "log" / "bot"
+    monkeypatch.chdir(tmp_path)
+    plugin = Backup.__new__(Backup)
+    assert not plugin.should_exclude(str(bot_dir / "dat" / "global.db"), "global.db")
+    assert not plugin.should_exclude(str(bot_dir / "dat"), "dat")
+    assert plugin.should_exclude(str(bot_dir / "log"), "log")
+    assert plugin.should_exclude(str(bot_dir / "node_modules"), "node_modules")
+    assert plugin.should_exclude(str(bot_dir / ".env"), ".env")
+    assert plugin.should_exclude(str(bot_dir / "bck" / "20260101.zip"), "20260101.zip")
+    assert plugin.should_exclude(str(bot_dir / "main.pyc"), "main.pyc")
+
+
 # --- faucet key -----------------------------------------------------------
 
 def test_faucet_config_holds_no_key_and_no_network_id() -> None:

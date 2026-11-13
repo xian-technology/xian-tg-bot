@@ -53,9 +53,11 @@ class Backup(TGBFPlugin):
         if Path(path).resolve() in secret_files():
             return True
 
-        # Check if the path contains any excluded directory
-        path_parts = Path(path).parts
-        if any(excl in path_parts for excl in path_exclusions):
+        # Excluded directories are matched by their own name; the backup walk
+        # prunes them top-down, so nothing below them is ever visited. The
+        # absolute path is not searched, because directories above the backup
+        # root (e.g. a checkout under /tmp) must not exclude the whole tree.
+        if name in path_exclusions:
             return True
 
         # Check name exclusions
