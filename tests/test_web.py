@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 import types
 from pathlib import Path
@@ -19,16 +20,30 @@ def test_web_app_wrapper_passes_configured_ipv6_host_to_uvicorn(host: str) -> No
     assert server.config.port == 5099
 
 
-def test_web_app_wrapper_preserves_default_bind_host() -> None:
+def test_web_app_wrapper_binds_loopback_by_default() -> None:
+    # The web API answers /address/{telegram_id} without authentication, so it
+    # must not be reachable from other hosts unless an operator opts in.
     wrapper = WebAppWrapper(res_path=Path("res"), port=5099)
 
     server = wrapper.run()
 
-    assert server.config.host == "0.0.0.0"
+    assert server.config.host == "127.0.0.1"
 
 
+def test_shipped_global_config_binds_loopback() -> None:
+    config = json.loads((Path(__file__).parent.parent / "cfg" / "global.json").read_text())
+
+    assert config["webserver_host"] == "127.0.0.1"
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected_host"),
+    [({"webserver_host": "::1"}, "::1"), ({}, "127.0.0.1")],
+    ids=["configured", "default-loopback"],
+)
 async def test_telegram_bot_wires_configured_webserver_host(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    configured: dict[str, str], expected_host: str,
 ) -> None:
     plugin_module = types.ModuleType("plugin")
 
@@ -62,8 +77,8 @@ async def test_telegram_bot_wires_configured_webserver_host(
         def get(self, key: str, default: Any = None, raise_if_missing: bool = False) -> Any:
             values = {
                 "admin_tg_id": 123456789,
-                "webserver_host": "::1",
                 "webserver_port": 5099,
+                **configured,
             }
             return values.get(key, default)
 
@@ -115,7 +130,7 @@ async def test_telegram_bot_wires_configured_webserver_host(
 
         assert captured == {
             "res_path": main.con.DIR_RES,
-            "host": "::1",
+            "host": expected_host,
             "port": 5099,
         }
     finally:

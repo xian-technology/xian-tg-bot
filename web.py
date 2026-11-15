@@ -4,10 +4,14 @@ import uvicorn
 from fastapi import APIRouter, FastAPI
 from starlette.responses import FileResponse
 
+# Plugin endpoints (e.g. /address/{telegram_id}) answer without authentication,
+# so the server listens on loopback unless `webserver_host` says otherwise.
+DEFAULT_WEB_HOST = "127.0.0.1"
+
 
 class WebAppWrapper:
 
-    def __init__(self, res_path: Path, host: str = "0.0.0.0", port: int = 5000):
+    def __init__(self, res_path: Path, host: str = DEFAULT_WEB_HOST, port: int = 5000):
         self.router = APIRouter()
         self.res_path = res_path
         self.host = host

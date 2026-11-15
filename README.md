@@ -131,7 +131,7 @@ Global settings (`cfg/global.json`):
 ```json
 {
   "admin_tg_id": 123456789,
-  "webserver_host": "0.0.0.0",
+  "webserver_host": "127.0.0.1",
   "webserver_port": 5000,
   "xian": {
     "node": "http://127.0.0.1:26657",
@@ -141,8 +141,11 @@ Global settings (`cfg/global.json`):
 }
 ```
 
-`webserver_host` defaults to `0.0.0.0`; set it to an IPv6 bind host such as
-`::` or `::1` when needed.
+`webserver_host` defaults to `127.0.0.1`. The web API (for example
+`/address/{telegram_id}`, which maps a Telegram user to their wallet address)
+has no authentication, so keep it on loopback. Bind another host (`0.0.0.0`,
+or an IPv6 host such as `::`) only behind a proxy or firewall that restricts
+who can reach it.
 
 Each plugin may provide `cfg/<plugin>.json` with keys such as `handle`,
 `requires`, `description`, `category`, `aliases`, `blacklist`, and

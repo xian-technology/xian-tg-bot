@@ -29,7 +29,7 @@ from wallet_crypto import (
     encrypt_plaintext_wallets,
     load_wallet_cipher,
 )
-from web import WebAppWrapper
+from web import DEFAULT_WEB_HOST, WebAppWrapper
 
 
 class TelegramBot:
@@ -167,7 +167,7 @@ class TelegramBot:
             # Init webserver
             self.web = WebAppWrapper(
                 res_path=con.DIR_RES,
-                host=self.cfg.get('webserver_host', default='0.0.0.0'),
+                host=self.cfg.get('webserver_host', default=DEFAULT_WEB_HOST),
                 port=self.cfg.get('webserver_port')
             )
 
