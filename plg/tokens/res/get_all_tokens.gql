@@ -1,7 +1,7 @@
 {
   allContracts(
     condition: {
-      xsc0001: true
+      xsc001: true
     }
   ) {
     nodes {

@@ -6,14 +6,12 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from utils import bds_state_value
-
 FetchGraphql = Callable[[str], Awaitable[dict[str, Any]]]
 
 
 def _pair(node: dict[str, Any]) -> dict[str, Any]:
-    indexed = bds_state_value(node["dataIndexed"])
-    data = bds_state_value(node["data"])
+    indexed = node["dataIndexed"]
+    data = node["data"]
     return {"id": data["pair"], "token0": indexed["token0"], "token1": indexed["token1"]}
 
 
@@ -41,7 +39,7 @@ async def token_symbols(fetch_graphql: FetchGraphql, token_contracts: list[str])
     symbols = {}
     for i, token in enumerate(token_contracts):
         nodes = result.get("data", {}).get(f"symbol_{i}", {}).get("nodes", [])
-        value = bds_state_value(nodes[0].get("value")) if nodes else None
+        value = nodes[0].get("value") if nodes else None
         if value:
             symbols[token] = value if isinstance(value, str) else json.dumps(value)
     return symbols
