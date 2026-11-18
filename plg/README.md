@@ -59,7 +59,8 @@ class YourPlugin(TGBFPlugin):
 
 ## Decorators & Helpers
 Use the provided decorators to guard handlers:
-- `@TGBFPlugin.logging()` – log incoming `Update` objects.
+- `@TGBFPlugin.logging()` – log bounded update/handler metadata, excluding
+  message bodies and user secrets.
 - `@TGBFPlugin.send_typing()` – show typing indicators.
 - `@TGBFPlugin.private()` / `public()` / `owner()` – scope commands.
 - `@TGBFPlugin.blacklist()` / `whitelist()` / `dependency()` – enforce access and dependencies.
