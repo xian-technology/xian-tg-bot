@@ -17,9 +17,6 @@ DAT_EXT = '.db'
 FILE_DAT = Path('global').with_suffix(DAT_EXT)
 FILE_CFG = Path('global').with_suffix(CFG_EXT)
 
-# Max Telegram message length
-MAX_TG_MSG_LEN = 4096
-
 INFO = "ℹ"
 WARNING = "⚠️"
 ERROR = "‼"
