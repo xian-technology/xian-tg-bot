@@ -10,7 +10,9 @@ STATE_VALUES = {"con_dex_demo_token": "XDT", "currency": "XIAN"}
 
 
 async def fake_graphql(query: str, variables: Any = None) -> dict[str, Any]:
-    aliases = re.findall(r'(symbol_\d+): allStates\(condition: \{key: "([^"]+)\.metadata', query)
+    aliases = re.findall(
+        r'(symbol_\d+): allStates\(first: 1, condition: \{key: "([^"]+)\.metadata', query,
+    )
     return {"data": {
         alias: {"nodes": [{"key": f"{token}.metadata:token_symbol", "value": STATE_VALUES[token]}]}
         for alias, token in aliases
@@ -34,12 +36,16 @@ async def test_token_symbols_decode_bds_state_values(module: str, cls: str, meth
 async def test_pairs_read_native_json_documents() -> None:
     import dex_pairs
 
-    async def graphql(query: str) -> dict[str, Any]:
+    async def graphql(query: str, variables: Any) -> dict[str, Any]:
         assert query == "PAIRS"
-        return {"data": {"allEvents": {"edges": [
-            {"node": {"dataIndexed": {"token0": "con_a", "token1": "currency"}, "data": {"pair": 1}}},
-            {"node": {"dataIndexed": {"token0": "con_b", "token1": "currency"}, "data": {"pair": 2}}},
-        ]}}}
+        first = variables["after"] is None
+        return {"data": {"allEvents": {
+            "nodes": [{
+                "dataIndexed": {"token0": "con_a" if first else "con_b", "token1": "currency"},
+                "data": {"pair": 1 if first else 2},
+            }],
+            "pageInfo": {"hasNextPage": first, "endCursor": "second"},
+        }}}
 
     assert await dex_pairs.pairs(graphql, "PAIRS") == [
         {"id": 1, "token0": "con_a", "token1": "currency"},
@@ -50,8 +56,11 @@ async def test_pairs_read_native_json_documents() -> None:
 async def test_no_pairs_and_no_symbols() -> None:
     import dex_pairs
 
-    async def graphql(query: str) -> dict[str, Any]:
-        return {"data": {"allEvents": {"edges": []}, "symbol_0": {"nodes": []}}}
+    async def graphql(query: str, variables: Any = None) -> dict[str, Any]:
+        return {"data": {
+            "allEvents": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+            "symbol_0": {"nodes": []},
+        }}
 
     assert await dex_pairs.pairs(graphql, "PAIRS") == []
     assert await dex_pairs.token_symbols(graphql, []) == {}

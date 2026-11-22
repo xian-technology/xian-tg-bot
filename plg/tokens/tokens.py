@@ -1,9 +1,11 @@
 import html
+from collections.abc import AsyncIterator
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 import constants as con
+from graphql_paging import connection_nodes
 from logging_setup import error_context
 from plugin import TGBFPlugin
 
@@ -17,6 +19,11 @@ class Tokens(TGBFPlugin):
 
         await self.add_handler(CommandHandler(self.handle, self.tokens_callback, block=False))
         await self.add_handler(CommandHandler('token', self.tokens_callback, block=False))
+
+    async def _catalog_contracts(self) -> AsyncIterator[str]:
+        query = await self.get_resource("get_all_tokens.gql")
+        async for entry in connection_nodes(self.fetch_graphql, query, "allContracts"):
+            yield entry["name"]
 
     @TGBFPlugin.logging()
     @TGBFPlugin.private()
@@ -65,10 +72,6 @@ class Tokens(TGBFPlugin):
 
             # Add all tokens
             elif context.args[0].lower() == 'add-all':
-                all_tokens_query = await self.get_resource("get_all_tokens.gql")
-                all_tokens_data = await self.fetch_graphql(all_tokens_query)
-                all_tokens = all_tokens_data['data']['allContracts']['nodes']
-
                 sql_insert = await self.get_resource("insert_token.sql")
                 decimals = self.cfg.get('default_decimals')
 
@@ -80,13 +83,13 @@ class Tokens(TGBFPlugin):
                        f"You will get a message when it's done.")
                 await update.message.reply_text(txt)
 
-                for entry in all_tokens:
-                    if entry['name'] in existing:
+                async for contract in self._catalog_contracts():
+                    if contract in existing:
                         continue
 
                     try:
                         ticker = await xian.get_state(
-                            entry['name'],
+                            contract,
                             'metadata',
                             'token_symbol'
                         )
@@ -95,14 +98,14 @@ class Tokens(TGBFPlugin):
                         await self.notify(e)
                         return
 
-                    if not entry['name'] or not ticker:
+                    if not contract or not ticker:
                         continue
 
                     try:
                         await self.exec_sql(
                             sql_insert,
                             user_id,
-                            entry['name'],
+                            contract,
                             ticker.upper(),
                             decimals
                         )
