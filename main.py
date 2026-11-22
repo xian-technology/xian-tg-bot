@@ -256,6 +256,7 @@ class TelegramBot:
             plugin = self.plugins[name]
 
             try:
+                plugin.cancel_scheduled_jobs()
                 # Run plugin's own cleanup method
                 await plugin.cleanup()
 

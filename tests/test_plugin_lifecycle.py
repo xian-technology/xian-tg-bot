@@ -73,6 +73,19 @@ async def test_removing_one_alias_keeps_other_aliases_and_their_cleanup(
     assert not bot.bot.handlers
 
 
+async def test_disabling_plugin_cancels_only_its_scheduled_jobs(
+    bot_plugin: tuple[Any, TGBFPlugin],
+) -> None:
+    bot, plugin = bot_plugin
+    callback = AsyncMock()
+    plugin.run_once(callback, when=60, name="shared")
+    plugin.run_repeating(callback, interval=60, name="shared")
+    unrelated = bot.bot.job_queue.run_once(callback, when=60, name="shared")
+
+    assert (await bot.disable_plugin(plugin.name))[0]
+    assert bot.bot.job_queue.jobs() == (unrelated,)
+
+
 @pytest.mark.parametrize("registered_before_start", [True, False])
 def test_http_route_removal_detaches_live_and_staged_routes(registered_before_start: bool) -> None:
     wrapper = WebAppWrapper(Path("res"))

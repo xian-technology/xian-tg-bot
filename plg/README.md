@@ -146,10 +146,8 @@ Endpoints register with the shared FastAPI app and must handle asynchronous exec
 ```python
 async def cleanup(self):
     await self.notify("Plugin shutting down")
-    if self.jobs:
-        for job in self.jobs:
-            job.schedule_removal()
 ```
+- The framework removes jobs registered through `self.run_once` and `self.run_repeating` when disabling the plugin. Use `cleanup()` for other resources, such as background tasks and connections.
 - Always guard against `update.message` being `None` (edited channel posts, callbacks).
 - Prefer HTML strings using constants from `constants.py` for emojis/icons.
 - Keep handlers short; offload blocking work via async helpers or `asyncio.to_thread`.

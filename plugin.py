@@ -87,6 +87,7 @@ class TGBFPlugin:
 
         # All endpoints of this plugin
         self._endpoints: dict[str, Callable] = dict()
+        self._scheduled_job_ids: set[str] = set()
 
         # Access to global config
         self._cfg_global = self._tgb.cfg
@@ -330,13 +331,14 @@ class TGBFPlugin:
 
         name = name if name else (self.name + "_" + utl.random_id())
 
-        return self.tgb.bot.job_queue.run_repeating(
+        job = self.tgb.bot.job_queue.run_repeating(
             callback,
             interval,
             first=first,
             last=last,
             data=data,
             name=name)
+        return self._track_scheduled_job(job)
 
     def run_once(self, callback, when, data=None, name=None):
         """ Executes the provided callback function only one time.
@@ -349,11 +351,24 @@ class TGBFPlugin:
         name of the job (if no 'name' provided) will be the name
         of the plugin """
 
-        return self.tgb.bot.job_queue.run_once(
+        job = self.tgb.bot.job_queue.run_once(
             callback,
             when,
             data=data,
             name=name if name else (self.name + "_" + utl.random_id()))
+        return self._track_scheduled_job(job)
+
+    def _track_scheduled_job(self, job: Job) -> Job:
+        # One-shot jobs disappear from the queue after they finish.
+        self._scheduled_job_ids.intersection_update(scheduled.id for scheduled in self.jobs)
+        self._scheduled_job_ids.add(job.id)
+        return job
+
+    def cancel_scheduled_jobs(self) -> None:
+        for job in self.jobs:
+            if job.id in self._scheduled_job_ids:
+                job.schedule_removal()
+        self._scheduled_job_ids.clear()
 
     @asynccontextmanager
     async def _get_kv(self, plugin="", db_name="") -> AsyncIterator[PickleDB]:
