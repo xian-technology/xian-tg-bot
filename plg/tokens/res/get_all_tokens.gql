@@ -1,9 +1,13 @@
-{
+query TokenCatalog($after: Cursor) {
   allContracts(
+    first: 200
+    after: $after
+    orderBy: NAME_ASC
     condition: {
       xsc001: true
     }
   ) {
+    pageInfo { hasNextPage endCursor }
     nodes {
       name
     }

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Awaitable, Callable
 from typing import Any
 
-FetchGraphql = Callable[[str], Awaitable[dict[str, Any]]]
+from graphql_paging import FetchGraphql, connection_nodes
 
 
 def _pair(node: dict[str, Any]) -> dict[str, Any]:
@@ -17,14 +16,12 @@ def _pair(node: dict[str, Any]) -> dict[str, Any]:
 
 async def pairs(fetch_graphql: FetchGraphql, query: str) -> list[dict[str, Any]]:
     """Every pair from its PairCreated event: id and both token contracts."""
-    result = await fetch_graphql(query)
-    edges = result.get("data", {}).get("allEvents", {}).get("edges") or []
-    return [_pair(edge["node"]) for edge in edges]
+    return [_pair(node) async for node in connection_nodes(fetch_graphql, query, "allEvents")]
 
 
 def _symbol_query(token_contracts: list[str]) -> str:
     parts = [
-        f'symbol_{i}: allStates(condition: {{key: "{token}.metadata:token_symbol"}}) '
+        f'symbol_{i}: allStates(first: 1, condition: {{key: "{token}.metadata:token_symbol"}}) '
         "{ nodes { key value } }"
         for i, token in enumerate(token_contracts)
     ]
