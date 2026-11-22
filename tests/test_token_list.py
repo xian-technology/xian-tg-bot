@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -29,12 +30,14 @@ async def test_token_catalog_visits_all_cursor_pages(
 ) -> None:
     from plg.tokens.tokens import Tokens
 
-    calls = []
+    calls: list[tuple[str, dict[str, str | None]]] = []
 
-    async def resource(self, name):
+    async def resource(self: Tokens, name: str) -> str:
         return name
 
-    async def fetch_graphql(self, query, variables):
+    async def fetch_graphql(
+        self: Tokens, query: str, variables: dict[str, str | None]
+    ) -> dict[str, Any]:
         calls.append((query, variables))
         first = variables["after"] is None
         return {
