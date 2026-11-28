@@ -20,6 +20,7 @@ from telegram import Chat, Message, Update
 from telegram.constants import ChatAction
 from telegram.ext import BaseHandler, CallbackContext, CallbackQueryHandler, Job
 from xian_py import XianAsync, XianClientConfig
+from xian_py.hybrid import committed_policy_version, parse_policy_version
 from xian_py.models import TransactionSubmission
 from xian_py.wallet import Wallet
 
@@ -914,6 +915,16 @@ class TGBFPlugin:
             return _whitelist
         return decorator
 
+    async def _require_legacy_custody(self) -> None:
+        pinned = os.getenv("XIAN_ACCOUNT_POLICY_VERSION")
+        strict = pinned is not None and parse_policy_version(pinned) == 2
+        if not strict and self.cfg_global.get("xian", "node"):
+            client = await self.get_xian()
+            policy = await client.get_state("_accounts", "policy")
+            strict = policy is not None and committed_policy_version(policy) == 2
+        if strict:
+            raise RuntimeError("Provision a registered hybrid account and configure XIAN_BOT_ACTIVE_BACKUP_DIR before accepting funds")
+
     async def get_wallet(self, user_id, db_name="global.db") -> Wallet:
         """ Return address and private key for given user_id.
         If no wallet exists then it will be created. Private keys are
@@ -929,14 +940,18 @@ class TGBFPlugin:
         if not res["success"]:
             raise RuntimeError("Wallet lookup failed")
 
+        backup_dir = os.getenv("XIAN_BOT_ACTIVE_BACKUP_DIR")
+        if not backup_dir:
+            await self._require_legacy_custody()
+
         # User already has a wallet
         if res["data"]:
             from custody import user_wallet
             row = res["data"][0]
-            private_key = None if os.getenv("XIAN_BOT_ACTIVE_BACKUP_DIR") else cipher.decrypt(user_id, row[2])
+            private_key = None if backup_dir else cipher.decrypt(user_id, row[2])
             return user_wallet(row[1], private_key, self.cfg_global.get("xian", "chain_id"))
 
-        if os.getenv("XIAN_BOT_ACTIVE_BACKUP_DIR"):
+        if backup_dir:
             raise RuntimeError("Provision a hybrid account and its active backup before use")
 
         # Create new wallet

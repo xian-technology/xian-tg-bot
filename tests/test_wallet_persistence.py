@@ -111,3 +111,16 @@ async def test_sql_constraint_failure_rolls_back_entire_statement(db_plugin: TGB
     rejected = await db_plugin.exec_sql_global("INSERT INTO sample VALUES (7), (7)")
     assert rejected["success"] is False
     assert (await db_plugin.exec_sql_global("SELECT value FROM sample"))["data"] == [(23,)]
+
+
+async def test_strict_policy_prevents_issuing_unspendable_bot_addresses(
+    db_plugin: TGBFPlugin, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await create_wallet_table(db_plugin)
+    db_plugin.cfg_global.set("http://127.0.0.1:26657", "xian", "node")
+    client = SimpleNamespace(get_state=AsyncMock(return_value={"version": 2, "transition_chi": 1000}))
+    monkeypatch.setattr(db_plugin, "get_xian", AsyncMock(return_value=client))
+    with pytest.raises(RuntimeError, match="hybrid"):
+        await db_plugin.get_wallet(23)
+    records = await db_plugin.exec_sql_global(await db_plugin.get_resource_global("select_wallet.sql"), 23)
+    assert records["data"] == []
