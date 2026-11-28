@@ -1,5 +1,6 @@
 import asyncio
 import html
+import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -239,12 +240,20 @@ class Testnet(TGBFPlugin):
     async def get_testnet_instance(self):
         """Get testnet instance with the faucet wallet from FAUCET_PRIVKEY"""
         from_privkey = read_secret(FAUCET_PRIVKEY)
-        if not from_privkey:
+        backup = os.environ.get("XIAN_BOT_FAUCET_ACTIVE_BACKUP_FILE")
+        if not from_privkey and not backup:
             raise FaucetNotConfiguredError(f"{FAUCET_PRIVKEY} or {FAUCET_PRIVKEY}_FILE is not set")
 
         testnet_node = self.cfg.get('testnet_node')
         chain_id = self.cfg.get('chain_id')
-        from_wallet = Wallet(from_privkey)
+        from xian_py.signers import load_signing_wallet
+        from_wallet = load_signing_wallet(
+            private_key=from_privkey or None,
+            active_backup_file=backup,
+            policy_version=os.environ.get("XIAN_ACCOUNT_POLICY_VERSION") if backup else None,
+            backup_password=os.environ.get("XIAN_BOT_FAUCET_BACKUP_PASSWORD") if backup else None,
+            chain_id=chain_id,
+        )
 
         # Without a configured chain_id the client discovers it from the node
         return await self.get_xian(testnet_node, chain_id, from_wallet)

@@ -267,3 +267,9 @@ suite before restarting.
 - [plg/README.md](plg/README.md) — plugin development patterns
 - `AGENTS.md` — contributor expectations
 - [`python-telegram-bot`](https://github.com/python-telegram-bot/python-telegram-bot) — underlying Telegram client
+
+## Hybrid Xian accounts
+
+Set `XIAN_BOT_ACTIVE_BACKUP_DIR` and `XIAN_BOT_BACKUP_PASSWORD` to require encrypted hybrid active credentials for existing custody rows. Each file is named with its recorded lowercase address and the `.json` suffix. Provision every required address before selecting this mode. Missing files prevent signing and this mode disables automatic legacy wallet creation. The faucet independently accepts `XIAN_BOT_FAUCET_ACTIVE_BACKUP_FILE` with `XIAN_BOT_FAUCET_BACKUP_PASSWORD`. Remove its legacy signing key when configuring a hybrid credential.
+
+For a historical credential without a wire-policy marker, set `XIAN_ACCOUNT_POLICY_VERSION` to the confirmed chain policy (`1` or `2`). A native credential generated for policy 2 carries its own marker. Keep the offline master and recovery material separate from the active signer.

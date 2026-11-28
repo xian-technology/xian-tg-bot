@@ -931,7 +931,13 @@ class TGBFPlugin:
 
         # User already has a wallet
         if res["data"]:
-            return Wallet(cipher.decrypt(user_id, res["data"][0][2]))
+            from custody import user_wallet
+            row = res["data"][0]
+            private_key = None if os.getenv("XIAN_BOT_ACTIVE_BACKUP_DIR") else cipher.decrypt(user_id, row[2])
+            return user_wallet(row[1], private_key, self.cfg_global.get("xian", "chain_id"))
+
+        if os.getenv("XIAN_BOT_ACTIVE_BACKUP_DIR"):
+            raise RuntimeError("Provision a hybrid account and its active backup before use")
 
         # Create new wallet
         wallet = Wallet()

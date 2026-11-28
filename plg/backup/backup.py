@@ -50,7 +50,14 @@ class Backup(TGBFPlugin):
 
         # Never ship secret files (e.g. the wallet encryption key); without
         # them the encrypted wallets in the database cannot be opened
-        if Path(path).resolve() in secret_files():
+        location = Path(path).resolve()
+        custody_dir = os.getenv("XIAN_BOT_ACTIVE_BACKUP_DIR")
+        faucet_file = os.getenv("XIAN_BOT_FAUCET_ACTIVE_BACKUP_FILE")
+        if custody_dir and location.is_relative_to(Path(custody_dir).resolve()):
+            return True
+        if faucet_file and location == Path(faucet_file).resolve():
+            return True
+        if location in secret_files():
             return True
 
         # Excluded directories are matched by their own name; the backup walk
@@ -143,7 +150,12 @@ class Backup(TGBFPlugin):
                 with open(filepath, 'rb') as f:
                     await context.bot.send_document(
                         chat_id=update.effective_user.id,
-                        caption=f"{con.DONE} Backup created with {file_count} files",
+                        caption=(
+                            f"{con.DONE} App backup created with {file_count} files"
+                            + ("\nKeep verified hybrid active and offline recovery backups separately; "
+                               "this app archive is not a complete custody backup."
+                               if os.environ.get("XIAN_BOT_ACTIVE_BACKUP_DIR") else "")
+                        ),
                         document=f,
                         filename=filename,
                         read_timeout=30,  # Lower timeouts to fail faster if stuck
